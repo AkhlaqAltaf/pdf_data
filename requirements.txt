@@ -1,2 +1,7 @@
+django
 pdfplumber
 PyPDF2
+pytesseract
+Pillow
+opencv-python
+numpy
