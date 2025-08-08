@@ -16,7 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-
+from django.urls.conf import include
+from src.apps.cont_record import urls
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("pdf_record/", include("src.apps.cont_record.urls", namespace="pdf_record")),
+
 ]
