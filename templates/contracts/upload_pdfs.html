@@ -4,12 +4,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Upload PDFs — Extract Text</title>
+    <title>Upload PDFs — Intelligent Text Extraction</title>
 
     <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-      /* Small extra styling to keep long text readable */
+      /* Enhanced styling for better data display */
       pre.extracted {
         white-space: pre-wrap;
         word-wrap: break-word;
@@ -19,13 +19,57 @@
         padding: 12px;
         border-radius: 6px;
         border: 1px solid #e9ecef;
+        font-size: 12px;
+      }
+      
+      .summary-card {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+      }
+      
+      .metadata-badge {
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+      }
+      
+      .section-indicator {
+        display: inline-block;
+        background: #4caf50;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        margin: 2px;
+      }
+      
+      .error-details {
+        background: #ffebee;
+        border: 1px solid #f44336;
+        border-radius: 4px;
+        padding: 8px;
+        margin-top: 8px;
+        font-family: monospace;
+        font-size: 11px;
+        max-height: 200px;
+        overflow: auto;
+      }
+      
+      .english-text {
+        background: #f1f8e9;
+        border-left: 4px solid #8bc34a;
+        font-family: monospace;
+        font-size: 11px;
+        max-height: 500px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
       }
     </style>
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
       <div class="container">
-        <a class="navbar-brand" href="#">Contracts PDF Importer</a>
+        <a class="navbar-brand" href="#">Intelligent PDF Text Extractor</a>
       </div>
     </nav>
 
@@ -34,22 +78,24 @@
         <div class="col-12 col-lg-6">
           <div class="card shadow-sm">
             <div class="card-body">
-              <h5 class="card-title">Upload one or more PDF files</h5>
-              <p class="card-text">Select multiple PDF files and submit. The server will extract plain text and show results below.</p>
+              <h5 class="card-title">Upload PDF files for intelligent extraction</h5>
+              <p class="card-text">The system will intelligently extract English text, detect sections, and parse structured data from your PDFs.</p>
 
               <form method="post" enctype="multipart/form-data" class="mb-3">
                 {% csrf_token %}
                 <div class="mb-3">
-                  <label for="pdfs" class="form-label">Choose PDFs</label>
-                  <input class="form-control" type="file" id="pdfs" name="pdfs" accept="application/pdf" multiple required>
-                  <div class="form-text">You can select multiple files (Ctrl/Cmd+click).</div>
+                  <label for="pdf_file" class="form-label">Choose PDF</label>
+                  <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept="application/pdf" required>
+                  <div class="form-text">Select a PDF file for extraction.</div>
                 </div>
 
                 <button type="submit" class="btn btn-primary">Upload & Extract</button>
               </form>
 
-              {% if uploaded %}
-                <div class="alert alert-info mt-3">Processed {{ results|length }} file{{ results|length|pluralize }}.</div>
+              {% if error %}
+                <div class="alert alert-danger mt-3">
+                  <strong>Error:</strong> {{ error }}
+                </div>
               {% endif %}
             </div>
           </div>
@@ -58,10 +104,14 @@
         <div class="col-12 col-lg-6">
           <div class="card shadow-sm">
             <div class="card-body">
-              <h5 class="card-title">Notes</h5>
+              <h5 class="card-title">Intelligent Features</h5>
               <ul>
-                <li>Extraction prefers textual PDFs. Scanned image PDFs may require OCR (Tesseract).</li>
-                <li>If you get empty text for a PDF, try converting it to searchable PDF or enable OCR.</li>
+                <li><strong>English Text Extraction:</strong> Automatically extracts only English text</li>
+                <li><strong>Section Detection:</strong> Intelligently identifies contract sections</li>
+                <li><strong>Table Parsing:</strong> Extracts structured data from tables</li>
+                <li><strong>Multi-language Support:</strong> Handles Hindi-English bilingual PDFs</li>
+                <li><strong>Structured Output:</strong> Organizes data into clear JSON format</li>
+                <li><strong>No Database Storage:</strong> Focus on extraction and parsing only</li>
               </ul>
             </div>
           </div>
@@ -69,35 +119,68 @@
       </div>
 
       <!-- Results area -->
-      <div class="row mt-4">
-        {% for r in results %}
-          <div class="col-12 col-md-6 mb-3">
-            <div class="card h-100">
-              <div class="card-header">
-                <strong>{{ r.filename }}</strong>
+      {% if uploaded_file %}
+        <div class="row mt-4">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>{{ uploaded_file.name }}</strong>
+                {% if summary %}
+                  <div>
+                    <span class="badge bg-primary metadata-badge">{{ summary.extraction_method }}</span>
+                    {% if summary.ocr_used %}
+                      <span class="badge bg-warning metadata-badge">OCR</span>
+                    {% endif %}
+                    {% if summary.tables_count > 0 %}
+                      <span class="badge bg-success metadata-badge">{{ summary.tables_count }} tables</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
               </div>
+              
               <div class="card-body">
-                {% if r.error %}
-                  <div class="alert alert-danger">{{ r.error }}</div>
+                {% if summary %}
+                  <div class="card summary-card mb-3">
+                    <div class="card-body py-2">
+                      <h6 class="card-title mb-2">Extraction Summary</h6>
+                      <div class="row">
+                        <div class="col-6">
+                          <small><strong>Pages:</strong> {{ summary.pages }}</small><br>
+                          <small><strong>Tables:</strong> {{ summary.tables_count }}</small>
+                        </div>
+                        <div class="col-6">
+                          <small><strong>English Text:</strong> {{ summary.english_text_length }} chars</small><br>
+                          <small><strong>Method:</strong> {{ summary.extraction_method }}</small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+                
+                {% if english_text %}
+                  <div class="mb-4">
+                    <h6>Extracted English Text (Full)</h6>
+                    <div class="english-text p-3">{{ english_text }}</div>
+                  </div>
+                {% endif %}
+                
+                {% if parsed_data %}
+                  <div class="mb-3">
+                    <h6>Structured Data (JSON)</h6>
+                    <pre class="extracted">{{ parsed_data|safe }}</pre>
+                  </div>
                 {% else %}
-                  {% if r.notice %}
-                    <div class="alert alert-warning">{{ r.notice }}</div>
-                  {% endif %}
-                  <pre class="extracted">{{ r.text|default:"(no text extracted)" }}</pre>
+                  <div class="text-muted">No data extracted.</div>
                 {% endif %}
               </div>
             </div>
           </div>
-        {% empty %}
-          <div class="col-12">
-            <div class="text-muted">No files processed yet.</div>
-          </div>
-        {% endfor %}
-      </div>
+        </div>
+      {% endif %}
     </main>
 
     <footer class="text-center py-4">
-      <small class="text-muted">Contracts PDF Importer • Simple demo</small>
+      <small class="text-muted">Intelligent PDF Text Extractor • Advanced parsing without database storage</small>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
