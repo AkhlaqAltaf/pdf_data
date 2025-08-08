@@ -5,3 +5,5 @@ pytesseract
 Pillow
 opencv-python
 numpy
+pandas
+openpyxl

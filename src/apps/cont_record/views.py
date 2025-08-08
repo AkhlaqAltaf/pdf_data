@@ -2,11 +2,13 @@
 from django.views.generic import TemplateView
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.http import JsonResponse
-import json
+from django.http import JsonResponse, HttpResponse
 from django.core.files.storage import FileSystemStorage
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
+import json
+import pandas as pd
+from io import BytesIO
 import re
 
 from src.utils.contract_parsers import parse_contract_text_to_json
@@ -263,6 +265,164 @@ def save_to_database(request):
     })
 
 
+@csrf_exempt
+def export_to_excel(request):
+    """Export extracted data to Excel file"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            parsed_data = data.get('parsed_data', {})
+            
+            # Create Excel writer
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                
+                # Contract Information Sheet
+                contract_data = parsed_data.get('contract', {})
+                contract_df = pd.DataFrame([{
+                    'Contract Number': contract_data.get('contract_no', ''),
+                    'Generated Date': contract_data.get('generated_date', ''),
+                }])
+                contract_df.to_excel(writer, sheet_name='Contract Info', index=False)
+                
+                # Organization Details Sheet
+                org_data = parsed_data.get('organisation', {})
+                org_df = pd.DataFrame([{
+                    'Type': org_data.get('type', ''),
+                    'Ministry': org_data.get('ministry', ''),
+                    'Department': org_data.get('department', ''),
+                    'Organization Name': org_data.get('organisation_name', ''),
+                    'Office': org_data.get('office', '')
+                }])
+                org_df.to_excel(writer, sheet_name='Organization Details', index=False)
+                
+                # Buyer Details Sheet
+                buyer_data = parsed_data.get('buyer', {})
+                buyer_df = pd.DataFrame([{
+                    'Designation': buyer_data.get('designation', ''),
+                    'Contact Number': buyer_data.get('contact_no', ''),
+                    'Email': buyer_data.get('email', ''),
+                    'GSTIN': buyer_data.get('gstin', ''),
+                    'Address': buyer_data.get('address', '')
+                }])
+                buyer_df.to_excel(writer, sheet_name='Buyer Details', index=False)
+                
+                # Financial Approval Sheet
+                financial_data = parsed_data.get('financial_approval', {})
+                financial_df = pd.DataFrame([{
+                    'IFD Concurrence': financial_data.get('ifd_concurrence', ''),
+                    'Admin Approval Designation': financial_data.get('admin_approval_designation', ''),
+                    'Financial Approval Designation': financial_data.get('financial_approval_designation', '')
+                }])
+                financial_df.to_excel(writer, sheet_name='Financial Approval', index=False)
+                
+                # Paying Authority Sheet
+                paying_data = parsed_data.get('paying_authority', {})
+                paying_df = pd.DataFrame([{
+                    'Role': paying_data.get('role', ''),
+                    'Payment Mode': paying_data.get('payment_mode', ''),
+                    'Designation': paying_data.get('designation', ''),
+                    'Email': paying_data.get('email', ''),
+                    'GSTIN': paying_data.get('gstin', ''),
+                    'Address': paying_data.get('address', '')
+                }])
+                paying_df.to_excel(writer, sheet_name='Paying Authority', index=False)
+                
+                # Seller Details Sheet
+                seller_data = parsed_data.get('seller', {})
+                seller_df = pd.DataFrame([{
+                    'GEM Seller ID': seller_data.get('gem_seller_id', ''),
+                    'Company Name': seller_data.get('seller_name', ''),
+                    'Contact Number': seller_data.get('contact_no', ''),
+                    'Email': seller_data.get('email', ''),
+                    'Address': seller_data.get('address', ''),
+                    'MSME Registration': seller_data.get('msme_registration_number', ''),
+                    'GSTIN': seller_data.get('gstin', '')
+                }])
+                seller_df.to_excel(writer, sheet_name='Seller Details', index=False)
+                
+                # Products Sheet
+                products_data = parsed_data.get('products', [])
+                if products_data:
+                    products_df = pd.DataFrame(products_data)
+                    products_df.to_excel(writer, sheet_name='Products', index=False)
+                else:
+                    # Create empty products sheet
+                    pd.DataFrame(columns=['Product Name', 'Brand', 'Quantity', 'Unit Price', 'Total Price']).to_excel(
+                        writer, sheet_name='Products', index=False
+                    )
+                
+                # Specifications Sheet
+                specs_data = parsed_data.get('specifications', [])
+                if specs_data:
+                    specs_df = pd.DataFrame(specs_data)
+                    specs_df.to_excel(writer, sheet_name='Specifications', index=False)
+                else:
+                    # Create empty specifications sheet
+                    pd.DataFrame(columns=['Category', 'Sub Spec', 'Value']).to_excel(
+                        writer, sheet_name='Specifications', index=False
+                    )
+                
+                # Consignees Sheet
+                consignees_data = parsed_data.get('consignees', [])
+                if consignees_data:
+                    consignees_df = pd.DataFrame(consignees_data)
+                    consignees_df.to_excel(writer, sheet_name='Consignees', index=False)
+                else:
+                    # Create empty consignees sheet
+                    pd.DataFrame(columns=['Designation', 'Email', 'Contact', 'Address', 'Delivery To']).to_excel(
+                        writer, sheet_name='Consignees', index=False
+                    )
+                
+                # EPBG Details Sheet
+                epbg_data = parsed_data.get('epbg', '')
+                epbg_df = pd.DataFrame([{'EPBG Details': epbg_data}])
+                epbg_df.to_excel(writer, sheet_name='EPBG Details', index=False)
+                
+                # Terms and Conditions Sheet
+                terms_data = parsed_data.get('terms', [])
+                if terms_data:
+                    terms_df = pd.DataFrame({'Terms and Conditions': terms_data})
+                    terms_df.to_excel(writer, sheet_name='Terms & Conditions', index=False)
+                else:
+                    # Create empty terms sheet
+                    pd.DataFrame(columns=['Terms and Conditions']).to_excel(
+                        writer, sheet_name='Terms & Conditions', index=False
+                    )
+                
+                # Raw Data Sheet
+                raw_data = {
+                    'Extracted English Text': [data.get('english_text', '')],
+                    'JSON Data': [json.dumps(parsed_data, indent=2)]
+                }
+                raw_df = pd.DataFrame(raw_data)
+                raw_df.to_excel(writer, sheet_name='Raw Data', index=False)
+            
+            # Prepare response
+            output.seek(0)
+            contract_no = parsed_data.get('contract', {}).get('contract_no', 'unknown')
+            filename = f"contract_data_{contract_no}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            response = HttpResponse(
+                output.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            return response
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error exporting to Excel: {str(e)}'
+            })
+    
+    return JsonResponse({
+        'success': False,
+        'message': 'Invalid request method'
+    })
+
+
 def _parse_date(date_str):
     """Parse date string to Date object"""
     if not date_str:
@@ -305,3 +465,8 @@ def _parse_decimal(value):
         return float(cleaned)
     except:
         return None
+
+
+def data_details(request):
+    """Display detailed data view with navigation"""
+    return render(request, 'contracts/data_details.html')

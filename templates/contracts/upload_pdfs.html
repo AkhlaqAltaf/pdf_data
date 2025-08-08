@@ -185,6 +185,48 @@
             font-size: 1.1rem;
         }
 
+        .action-buttons-section {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .action-buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .action-button-card {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .action-button-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 255, 65, 0.4);
+        }
+
+        .action-button-card h4 {
+            color: #00ff41;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .action-button-card p {
+            color: #7fdbff;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
         .database-section {
             background: rgba(0, 0, 0, 0.9);
             border: 2px solid #ff0066;
@@ -325,6 +367,46 @@
         {% endif %}
 
         {% if parsed_data %}
+        <!-- Action Buttons Section - Above Results -->
+        <div class="action-buttons-section">
+            <h3>🚀 Data Actions</h3>
+            <div class="action-buttons-grid">
+                <div class="action-button-card">
+                    <h4>💾 Save to Database</h4>
+                    <p>Store the extracted data in the database</p>
+                    <button class="save-btn" id="saveToDbBtn" onclick="saveToDatabase()">
+                        💾 Save to Database
+                    </button>
+                    <div class="loading" id="loading">
+                        <div class="spinner"></div>
+                        <p>Saving to database...</p>
+                    </div>
+                    <div id="statusMessage"></div>
+                </div>
+                
+                <div class="action-button-card">
+                    <h4>📊 Export to Excel</h4>
+                    <p>Download data as Excel file with multiple sheets</p>
+                    <button class="save-btn" id="exportExcelBtn" onclick="exportToExcel()" style="background: linear-gradient(45deg, #ff6b35, #f7931e);">
+                        📊 Export to Excel
+                    </button>
+                    <div class="loading" id="loadingExcel" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Generating Excel file...</p>
+                    </div>
+                    <div id="excelStatusMessage"></div>
+                </div>
+                
+                <div class="action-button-card">
+                    <h4>📋 View Data Details</h4>
+                    <p>Navigate to detailed data view</p>
+                    <button class="save-btn" onclick="viewDataDetails()" style="background: linear-gradient(45deg, #9c27b0, #673ab7);">
+                        📋 View Details
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="summary-grid">
             <div class="summary-item">
                 <strong>Pages</strong>
@@ -360,22 +442,6 @@
                 <h3>🔍 Parsed JSON Data</h3>
                 <div class="data-display" id="parsedData">{{ parsed_data|safe }}</div>
             </div>
-        </div>
-
-        <div class="database-section">
-            <h3>💾 Save to Database</h3>
-            <p>Click the button below to save the extracted data to the database:</p>
-            
-            <button class="save-btn" id="saveToDbBtn" onclick="saveToDatabase()">
-                💾 Save to Database
-            </button>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Saving to database...</p>
-            </div>
-            
-            <div id="statusMessage"></div>
         </div>
         {% endif %}
     </div>
@@ -466,6 +532,85 @@
             .finally(() => {
                 saveBtn.disabled = false;
             });
+        }
+
+        // Export to Excel functionality
+        function exportToExcel() {
+            const exportBtn = document.getElementById('exportExcelBtn');
+            const loadingExcel = document.getElementById('loadingExcel');
+            const excelStatusMessage = document.getElementById('excelStatusMessage');
+            
+            // Disable button and show loading
+            exportBtn.disabled = true;
+            loadingExcel.style.display = 'block';
+            excelStatusMessage.innerHTML = '';
+            
+            // Prepare data for export
+            const data = {
+                parsed_data: JSON.parse(document.getElementById('parsedData').textContent),
+                english_text: document.getElementById('englishText').textContent
+            };
+            
+            // Send AJAX request
+            fetch('/pdf_record/export-excel/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                } else {
+                    return response.json().then(err => Promise.reject(err));
+                }
+            })
+            .then(blob => {
+                loadingExcel.style.display = 'none';
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `contract_data_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                excelStatusMessage.innerHTML = `
+                    <div class="status-message status-success">
+                        ✅ Excel file downloaded successfully!
+                    </div>
+                `;
+            })
+            .catch(error => {
+                loadingExcel.style.display = 'none';
+                excelStatusMessage.innerHTML = `
+                    <div class="status-message status-error">
+                        ❌ Error: ${error.message || 'Failed to export Excel file'}
+                    </div>
+                `;
+            })
+            .finally(() => {
+                exportBtn.disabled = false;
+            });
+        }
+
+        // View data details function
+        function viewDataDetails() {
+            // Store the parsed data in sessionStorage for the details page
+            const parsedData = document.getElementById('parsedData').textContent;
+            const englishText = document.getElementById('englishText').textContent;
+            
+            sessionStorage.setItem('parsedData', parsedData);
+            sessionStorage.setItem('englishText', englishText);
+            
+            // Navigate to the details page
+            window.location.href = '/pdf_record/data-details/';
         }
 
         // Add some cyberpunk animations
