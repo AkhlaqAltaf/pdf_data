@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Data Table - PDF Extraction</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ff41;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            text-shadow: 0 0 20px #00ff41;
+            margin-bottom: 10px;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00ff41; }
+            to { text-shadow: 0 0 30px #00ff41, 0 0 40px #00ff41; }
+        }
+
+        .action-section {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .export-btn {
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+        }
+
+        .back-btn {
+            background: linear-gradient(45deg, #ff0066, #ff6b35);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 0, 102, 0.4);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .data-table th,
+        .data-table td {
+            border: 1px solid #00ff41;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: rgba(0, 255, 65, 0.2);
+            color: #00ff41;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .data-table td {
+            color: #7fdbff;
+        }
+
+        .data-table tr:hover {
+            background: rgba(0, 255, 65, 0.1);
+        }
+
+        .section-header {
+            background: rgba(0, 255, 65, 0.3);
+            color: #00ff41;
+            font-weight: bold;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        .empty-message {
+            text-align: center;
+            color: #7fdbff;
+            font-size: 1.2rem;
+            padding: 40px;
+        }
+
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 3px solid rgba(0, 255, 65, 0.3);
+            border-top: 3px solid #00ff41;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .status-success {
+            background: rgba(0, 255, 65, 0.2);
+            color: #00ff41;
+            border: 1px solid #00ff41;
+        }
+
+        .status-error {
+            background: rgba(255, 0, 102, 0.2);
+            color: #ff0066;
+            border: 1px solid #ff0066;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 All Data Table</h1>
+            <p>Complete extracted data in organized table format</p>
+        </div>
+
+        <div class="action-section">
+            <h3>🚀 Actions</h3>
+            <button class="export-btn" onclick="exportAllDataToExcel()">
+                📊 Export All Data to Excel
+            </button>
+            <button class="back-btn" onclick="goBack()">← Back to Upload</button>
+            
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating Excel file...</p>
+            </div>
+            
+            <div id="statusMessage"></div>
+        </div>
+
+        <div id="dataTableContainer">
+            <div class="empty-message">
+                Loading data...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+
+        // Load data from sessionStorage
+        document.addEventListener('DOMContentLoaded', function() {
+            const storedData = sessionStorage.getItem('parsedData');
+            const storedText = sessionStorage.getItem('englishText');
+            
+            if (storedData && storedText) {
+                try {
+                    const parsedData = JSON.parse(storedData);
+                    allData = createAllDataTable(parsedData, storedText);
+                    displayAllDataTable();
+                } catch (e) {
+                    console.error('Error parsing stored data:', e);
+                    showError('Error loading data. Please go back and try again.');
+                }
+            } else {
+                showError('No data found. Please go back and extract data first.');
+            }
+        });
+
+        function createAllDataTable(parsedData, englishText) {
+            const allData = [];
+            
+            // Contract Information
+            const contract = parsedData.contract || {};
+            allData.push({ section: 'CONTRACT INFORMATION', field: '', value: '' });
+            allData.push({ section: 'Contract Information', field: 'Contract Number', value: contract.contract_no || 'N/A' });
+            allData.push({ section: 'Contract Information', field: 'Generated Date', value: contract.generated_date || 'N/A' });
+            allData.push({ section: 'Contract Information', field: '', value: '' });
+            
+            // Organization Details
+            const org = parsedData.organisation || {};
+            allData.push({ section: 'ORGANIZATION DETAILS', field: '', value: '' });
+            allData.push({ section: 'Organization Details', field: 'Type', value: org.type || 'N/A' });
+            allData.push({ section: 'Organization Details', field: 'Ministry', value: org.ministry || 'N/A' });
+            allData.push({ section: 'Organization Details', field: 'Department', value: org.department || 'N/A' });
+            allData.push({ section: 'Organization Details', field: 'Organization Name', value: org.organisation_name || 'N/A' });
+            allData.push({ section: 'Organization Details', field: 'Office', value: org.office || 'N/A' });
+            allData.push({ section: 'Organization Details', field: '', value: '' });
+            
+            // Buyer Details
+            const buyer = parsedData.buyer || {};
+            allData.push({ section: 'BUYER DETAILS', field: '', value: '' });
+            allData.push({ section: 'Buyer Details', field: 'Designation', value: buyer.designation || 'N/A' });
+            allData.push({ section: 'Buyer Details', field: 'Contact Number', value: buyer.contact_no || 'N/A' });
+            allData.push({ section: 'Buyer Details', field: 'Email', value: buyer.email || 'N/A' });
+            allData.push({ section: 'Buyer Details', field: 'GSTIN', value: buyer.gstin || 'N/A' });
+            allData.push({ section: 'Buyer Details', field: 'Address', value: buyer.address || 'N/A' });
+            allData.push({ section: 'Buyer Details', field: '', value: '' });
+            
+            // Financial Approval
+            const financial = parsedData.financial_approval || {};
+            allData.push({ section: 'FINANCIAL APPROVAL', field: '', value: '' });
+            allData.push({ section: 'Financial Approval', field: 'IFD Concurrence', value: financial.ifd_concurrence || 'N/A' });
+            allData.push({ section: 'Financial Approval', field: 'Admin Approval Designation', value: financial.admin_approval_designation || 'N/A' });
+            allData.push({ section: 'Financial Approval', field: 'Financial Approval Designation', value: financial.financial_approval_designation || 'N/A' });
+            allData.push({ section: 'Financial Approval', field: '', value: '' });
+            
+            // Paying Authority
+            const paying = parsedData.paying_authority || {};
+            allData.push({ section: 'PAYING AUTHORITY', field: '', value: '' });
+            allData.push({ section: 'Paying Authority', field: 'Role', value: paying.role || 'N/A' });
+            allData.push({ section: 'Paying Authority', field: 'Payment Mode', value: paying.payment_mode || 'N/A' });
+            allData.push({ section: 'Paying Authority', field: 'Designation', value: paying.designation || 'N/A' });
+            allData.push({ section: 'Paying Authority', field: 'Email', value: paying.email || 'N/A' });
+            allData.push({ section: 'Paying Authority', field: 'GSTIN', value: paying.gstin || 'N/A' });
+            allData.push({ section: 'Paying Authority', field: 'Address', value: paying.address || 'N/A' });
+            allData.push({ section: 'Paying Authority', field: '', value: '' });
+            
+            // Seller Details
+            const seller = parsedData.seller || {};
+            allData.push({ section: 'SELLER DETAILS', field: '', value: '' });
+            allData.push({ section: 'Seller Details', field: 'GEM Seller ID', value: seller.gem_seller_id || 'N/A' });
+            allData.push({ section: 'Seller Details', field: 'Company Name', value: seller.seller_name || 'N/A' });
+            allData.push({ section: 'Seller Details', field: 'Contact Number', value: seller.contact_no || 'N/A' });
+            allData.push({ section: 'Seller Details', field: 'Email', value: seller.email || 'N/A' });
+            allData.push({ section: 'Seller Details', field: 'Address', value: seller.address || 'N/A' });
+            allData.push({ section: 'Seller Details', field: 'MSME Registration', value: seller.msme_registration_number || 'N/A' });
+            allData.push({ section: 'Seller Details', field: 'GSTIN', value: seller.gstin || 'N/A' });
+            allData.push({ section: 'Seller Details', field: '', value: '' });
+            
+            // Products
+            const products = parsedData.products || [];
+            if (products.length > 0) {
+                allData.push({ section: 'PRODUCTS', field: '', value: '' });
+                products.forEach((product, index) => {
+                    allData.push({ section: 'Products', field: `Product ${index + 1} - Name`, value: product.product_name || 'N/A' });
+                    allData.push({ section: 'Products', field: `Product ${index + 1} - Brand`, value: product.brand || 'N/A' });
+                    allData.push({ section: 'Products', field: `Product ${index + 1} - Quantity`, value: product.ordered_quantity || 'N/A' });
+                    allData.push({ section: 'Products', field: `Product ${index + 1} - Unit Price`, value: product.unit_price || 'N/A' });
+                    allData.push({ section: 'Products', field: `Product ${index + 1} - Total Price`, value: product.total_price || 'N/A' });
+                    allData.push({ section: 'Products', field: '', value: '' });
+                });
+            }
+            
+            // Specifications
+            const specs = parsedData.specifications || [];
+            if (specs.length > 0) {
+                allData.push({ section: 'SPECIFICATIONS', field: '', value: '' });
+                specs.forEach((spec, index) => {
+                    allData.push({ section: 'Specifications', field: `Spec ${index + 1} - Category`, value: spec.category || 'N/A' });
+                    allData.push({ section: 'Specifications', field: `Spec ${index + 1} - Sub Spec`, value: spec.sub_spec || 'N/A' });
+                    allData.push({ section: 'Specifications', field: `Spec ${index + 1} - Value`, value: spec.value || 'N/A' });
+                    allData.push({ section: 'Specifications', field: '', value: '' });
+                });
+            }
+            
+            // Consignees
+            const consignees = parsedData.consignees || [];
+            if (consignees.length > 0) {
+                allData.push({ section: 'CONSIGNEES', field: '', value: '' });
+                consignees.forEach((consignee, index) => {
+                    allData.push({ section: 'Consignees', field: `Consignee ${index + 1} - Designation`, value: consignee.designation || 'N/A' });
+                    allData.push({ section: 'Consignees', field: `Consignee ${index + 1} - Email`, value: consignee.email || 'N/A' });
+                    allData.push({ section: 'Consignees', field: `Consignee ${index + 1} - Contact`, value: consignee.contact || 'N/A' });
+                    allData.push({ section: 'Consignees', field: `Consignee ${index + 1} - Address`, value: consignee.address || 'N/A' });
+                    allData.push({ section: 'Consignees', field: `Consignee ${index + 1} - Delivery To`, value: consignee.delivery_to || 'N/A' });
+                    allData.push({ section: 'Consignees', field: '', value: '' });
+                });
+            }
+            
+            // EPBG Details
+            const epbg = parsedData.epbg || '';
+            if (epbg) {
+                allData.push({ section: 'EPBG DETAILS', field: '', value: '' });
+                allData.push({ section: 'EPBG Details', field: 'EPBG Information', value: epbg });
+                allData.push({ section: 'EPBG Details', field: '', value: '' });
+            }
+            
+            // Terms and Conditions
+            const terms = parsedData.terms || [];
+            if (terms.length > 0) {
+                allData.push({ section: 'TERMS AND CONDITIONS', field: '', value: '' });
+                terms.forEach((term, index) => {
+                    allData.push({ section: 'Terms and Conditions', field: `Clause ${index + 1}`, value: term });
+                });
+            }
+            
+            return allData;
+        }
+
+        function displayAllDataTable() {
+            const container = document.getElementById('dataTableContainer');
+            
+            if (allData.length === 0) {
+                container.innerHTML = '<div class="empty-message">No data available</div>';
+                return;
+            }
+            
+            let html = '<table class="data-table">';
+            html += '<tr><th>Section</th><th>Field</th><th>Value</th></tr>';
+            
+            allData.forEach(row => {
+                if (row.field === '' && row.value === '') {
+                    // Section header
+                    html += `<tr><td colspan="3" class="section-header">${row.section}</td></tr>`;
+                } else {
+                    html += `<tr><td>${row.section}</td><td>${row.field}</td><td>${row.value}</td></tr>`;
+                }
+            });
+            
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function exportAllDataToExcel() {
+            const exportBtn = document.querySelector('.export-btn');
+            const loading = document.getElementById('loading');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            exportBtn.disabled = true;
+            loading.style.display = 'block';
+            statusMessage.innerHTML = '';
+            
+            const data = {
+                all_data: allData,
+                parsed_data: JSON.parse(sessionStorage.getItem('parsedData')),
+                english_text: sessionStorage.getItem('englishText')
+            };
+            
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            
+            fetch('/pdf_record/export-all-data-excel/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                } else {
+                    return response.json().then(err => {
+                        console.error('Server error:', err);
+                        throw new Error(err.message || `HTTP ${response.status}: ${response.statusText}`);
+                    });
+                }
+            })
+            .then(blob => {
+                loading.style.display = 'none';
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `all_contract_data_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                statusMessage.innerHTML = `
+                    <div class="status-message status-success">
+                        ✅ All data Excel file downloaded successfully!
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Export error:', error);
+                loading.style.display = 'none';
+                statusMessage.innerHTML = `
+                    <div class="status-message status-error">
+                        ❌ Error: ${error.message || 'Failed to export Excel file'}
+                    </div>
+                `;
+            })
+            .finally(() => {
+                exportBtn.disabled = false;
+            });
+        }
+
+        function showError(message) {
+            document.getElementById('dataTableContainer').innerHTML = `
+                <div class="empty-message" style="color: #ff0066;">
+                    ❌ ${message}
+                </div>
+            `;
+        }
+
+        function goBack() {
+            window.location.href = '/pdf_record/';
+        }
+    </script>
+</body>
+</html>

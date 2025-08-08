@@ -404,6 +404,14 @@
                         📋 View Details
                     </button>
                 </div>
+                
+                <div class="action-button-card">
+                    <h4>📊 All Data Table</h4>
+                    <p>View all data in single organized table</p>
+                    <button class="save-btn" onclick="viewAllDataTable()" style="background: linear-gradient(45deg, #00bcd4, #009688);">
+                        📊 All Data Table
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -494,16 +502,28 @@
                 english_text: document.getElementById('englishText').textContent
             };
             
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            
             // Send AJAX request
             fetch('/pdf_record/save-to-database/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify(data)
             })
-            .then(response => response.json())
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    return response.json().then(err => {
+                        console.error('Server error:', err);
+                        throw new Error(err.message || `HTTP ${response.status}: ${response.statusText}`);
+                    });
+                }
+            })
             .then(data => {
                 loading.style.display = 'none';
                 
@@ -551,12 +571,17 @@
                 english_text: document.getElementById('englishText').textContent
             };
             
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            console.log('CSRF Token:', csrfToken ? 'Found' : 'Not found');
+            console.log('Data to export:', data);
+            
             // Send AJAX request
             fetch('/pdf_record/export-excel/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify(data)
             })
@@ -564,7 +589,10 @@
                 if (response.ok) {
                     return response.blob();
                 } else {
-                    return response.json().then(err => Promise.reject(err));
+                    return response.json().then(err => {
+                        console.error('Server error:', err);
+                        throw new Error(err.message || `HTTP ${response.status}: ${response.statusText}`);
+                    });
                 }
             })
             .then(blob => {
@@ -588,6 +616,7 @@
                 `;
             })
             .catch(error => {
+                console.error('Export error:', error);
                 loadingExcel.style.display = 'none';
                 excelStatusMessage.innerHTML = `
                     <div class="status-message status-error">
@@ -611,6 +640,19 @@
             
             // Navigate to the details page
             window.location.href = '/pdf_record/data-details/';
+        }
+
+        // View all data table function
+        function viewAllDataTable() {
+            // Store the parsed data in sessionStorage for the all data table page
+            const parsedData = document.getElementById('parsedData').textContent;
+            const englishText = document.getElementById('englishText').textContent;
+            
+            sessionStorage.setItem('parsedData', parsedData);
+            sessionStorage.setItem('englishText', englishText);
+            
+            // Navigate to the all data table page
+            window.location.href = '/pdf_record/all-data-table/';
         }
 
         // Add some cyberpunk animations
