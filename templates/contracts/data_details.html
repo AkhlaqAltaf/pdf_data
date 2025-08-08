@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Details - PDF Extraction</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ff41;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            text-shadow: 0 0 20px #00ff41;
+            margin-bottom: 10px;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00ff41; }
+            to { text-shadow: 0 0 30px #00ff41, 0 0 40px #00ff41; }
+        }
+
+        .nav-section {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .nav-item {
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid #00ff41;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .nav-item:hover {
+            background: rgba(0, 255, 65, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 65, 0.4);
+        }
+
+        .nav-item.active {
+            background: rgba(0, 255, 65, 0.3);
+            border-color: #00d4aa;
+        }
+
+        .content-section {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #00ff41;
+        }
+
+        .content-title {
+            font-size: 2rem;
+            color: #00ff41;
+        }
+
+        .back-btn {
+            background: linear-gradient(45deg, #ff0066, #ff6b35);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 0, 102, 0.4);
+        }
+
+        .data-display {
+            background: rgba(0, 20, 0, 0.8);
+            border: 1px solid #00ff41;
+            border-radius: 5px;
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .data-table th,
+        .data-table td {
+            border: 1px solid #00ff41;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: rgba(0, 255, 65, 0.2);
+            color: #00ff41;
+            font-weight: bold;
+        }
+
+        .data-table td {
+            color: #7fdbff;
+        }
+
+        .empty-message {
+            text-align: center;
+            color: #7fdbff;
+            font-size: 1.2rem;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Data Details</h1>
+            <p>Navigate through extracted data sections</p>
+        </div>
+
+        <div class="nav-section">
+            <h3 style="margin-bottom: 20px; text-align: center; color: #00ff41;">📋 Data Sections</h3>
+            <div class="nav-grid">
+                <div class="nav-item" onclick="showSection('contract')">📄 Contract Info</div>
+                <div class="nav-item" onclick="showSection('organisation')">🏢 Organization</div>
+                <div class="nav-item" onclick="showSection('buyer')">👤 Buyer Details</div>
+                <div class="nav-item" onclick="showSection('financial')">💰 Financial Approval</div>
+                <div class="nav-item" onclick="showSection('paying')">💳 Paying Authority</div>
+                <div class="nav-item" onclick="showSection('seller')">🏪 Seller Details</div>
+                <div class="nav-item" onclick="showSection('products')">📦 Products</div>
+                <div class="nav-item" onclick="showSection('specifications')">⚙️ Specifications</div>
+                <div class="nav-item" onclick="showSection('consignees')">🚚 Consignees</div>
+                <div class="nav-item" onclick="showSection('epbg')">🏦 EPBG Details</div>
+                <div class="nav-item" onclick="showSection('terms')">📜 Terms & Conditions</div>
+                <div class="nav-item" onclick="showSection('raw')">📋 Raw Data</div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <div class="content-header">
+                <h2 class="content-title" id="sectionTitle">Select a section above</h2>
+                <button class="back-btn" onclick="goBack()">← Back to Upload</button>
+            </div>
+            <div id="contentArea">
+                <div class="empty-message">
+                    Click on any section above to view detailed data
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let parsedData = null;
+        let englishText = '';
+
+        // Load data from sessionStorage
+        document.addEventListener('DOMContentLoaded', function() {
+            const storedData = sessionStorage.getItem('parsedData');
+            const storedText = sessionStorage.getItem('englishText');
+            
+            if (storedData && storedText) {
+                try {
+                    parsedData = JSON.parse(storedData);
+                    englishText = storedText;
+                } catch (e) {
+                    console.error('Error parsing stored data:', e);
+                    showError('Error loading data. Please go back and try again.');
+                }
+            } else {
+                showError('No data found. Please go back and extract data first.');
+            }
+        });
+
+        function showSection(section) {
+            // Update active nav item
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            const contentArea = document.getElementById('contentArea');
+            const sectionTitle = document.getElementById('sectionTitle');
+
+            if (!parsedData) {
+                showError('No data available');
+                return;
+            }
+
+            let content = '';
+            let title = '';
+
+            switch(section) {
+                case 'contract':
+                    title = '📄 Contract Information';
+                    content = formatData(parsedData.contract || {}, 'contract');
+                    break;
+                case 'organisation':
+                    title = '🏢 Organization Details';
+                    content = formatData(parsedData.organisation || {}, 'organisation');
+                    break;
+                case 'buyer':
+                    title = '👤 Buyer Details';
+                    content = formatData(parsedData.buyer || {}, 'buyer');
+                    break;
+                case 'financial':
+                    title = '💰 Financial Approval';
+                    content = formatData(parsedData.financial_approval || {}, 'financial');
+                    break;
+                case 'paying':
+                    title = '💳 Paying Authority';
+                    content = formatData(parsedData.paying_authority || {}, 'paying');
+                    break;
+                case 'seller':
+                    title = '🏪 Seller Details';
+                    content = formatData(parsedData.seller || {}, 'seller');
+                    break;
+                case 'products':
+                    title = '📦 Products';
+                    content = formatArrayData(parsedData.products || [], 'products');
+                    break;
+                case 'specifications':
+                    title = '⚙️ Specifications';
+                    content = formatArrayData(parsedData.specifications || [], 'specifications');
+                    break;
+                case 'consignees':
+                    title = '🚚 Consignees';
+                    content = formatArrayData(parsedData.consignees || [], 'consignees');
+                    break;
+                case 'epbg':
+                    title = '🏦 EPBG Details';
+                    content = formatEPBGData(parsedData.epbg || '');
+                    break;
+                case 'terms':
+                    title = '📜 Terms & Conditions';
+                    content = formatTermsData(parsedData.terms || []);
+                    break;
+                case 'raw':
+                    title = '📋 Raw Data';
+                    content = formatRawData(parsedData, englishText);
+                    break;
+            }
+
+            sectionTitle.textContent = title;
+            contentArea.innerHTML = content;
+        }
+
+        function formatData(data, type) {
+            if (Object.keys(data).length === 0) {
+                return `<div class="empty-message">No ${type} data available</div>`;
+            }
+
+            let html = '<table class="data-table">';
+            html += '<tr><th>Field</th><th>Value</th></tr>';
+            
+            for (const [key, value] of Object.entries(data)) {
+                html += `<tr><td>${key.replace(/_/g, ' ').toUpperCase()}</td><td>${value || 'N/A'}</td></tr>`;
+            }
+            
+            html += '</table>';
+            return html;
+        }
+
+        function formatArrayData(array, type) {
+            if (array.length === 0) {
+                return `<div class="empty-message">No ${type} data available</div>`;
+            }
+
+            let html = '<table class="data-table">';
+            
+            // Create headers based on first item
+            if (array.length > 0) {
+                const headers = Object.keys(array[0]);
+                html += '<tr>';
+                headers.forEach(header => {
+                    html += `<th>${header.replace(/_/g, ' ').toUpperCase()}</th>`;
+                });
+                html += '</tr>';
+                
+                // Add data rows
+                array.forEach(item => {
+                    html += '<tr>';
+                    headers.forEach(header => {
+                        html += `<td>${item[header] || 'N/A'}</td>`;
+                    });
+                    html += '</tr>';
+                });
+            }
+            
+            html += '</table>';
+            return html;
+        }
+
+        function formatEPBGData(epbg) {
+            if (!epbg) {
+                return '<div class="empty-message">No EPBG data available</div>';
+            }
+            return `<div class="data-display">${epbg}</div>`;
+        }
+
+        function formatTermsData(terms) {
+            if (terms.length === 0) {
+                return '<div class="empty-message">No terms and conditions available</div>';
+            }
+
+            let html = '<div class="data-display">';
+            terms.forEach((term, index) => {
+                html += `<div style="margin-bottom: 15px; padding: 10px; border-left: 3px solid #00ff41; background: rgba(0, 255, 65, 0.1);">
+                    <strong>Clause ${index + 1}:</strong><br>
+                    ${term}
+                </div>`;
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function formatRawData(data, text) {
+            return `
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: #00ff41; margin-bottom: 15px;">📄 Extracted English Text</h3>
+                    <div class="data-display">${text}</div>
+                </div>
+                <div>
+                    <h3 style="color: #00ff41; margin-bottom: 15px;">🔍 Complete JSON Data</h3>
+                    <div class="data-display">${JSON.stringify(data, null, 2)}</div>
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            document.getElementById('contentArea').innerHTML = `
+                <div class="empty-message" style="color: #ff0066;">
+                    ❌ ${message}
+                </div>
+            `;
+        }
+
+        function goBack() {
+            window.location.href = '/pdf_record/';
+        }
+    </script>
+</body>
+</html>
