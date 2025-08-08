@@ -1,188 +1,491 @@
-<!-- templates/contracts/upload_pdfs.html -->
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Upload PDFs — Intelligent Text Extraction</title>
-
-    <!-- Bootstrap 5 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Data Extraction - Cyberpunk Interface</title>
     <style>
-      /* Enhanced styling for better data display */
-      pre.extracted {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        max-height: 400px;
-        overflow: auto;
-        background: #f8f9fa;
-        padding: 12px;
-        border-radius: 6px;
-        border: 1px solid #e9ecef;
-        font-size: 12px;
-      }
-      
-      .summary-card {
-        background: #e3f2fd;
-        border-left: 4px solid #2196f3;
-      }
-      
-      .metadata-badge {
-        font-size: 0.75rem;
-        margin-right: 0.5rem;
-      }
-      
-      .section-indicator {
-        display: inline-block;
-        background: #4caf50;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.7rem;
-        margin: 2px;
-      }
-      
-      .error-details {
-        background: #ffebee;
-        border: 1px solid #f44336;
-        border-radius: 4px;
-        padding: 8px;
-        margin-top: 8px;
-        font-family: monospace;
-        font-size: 11px;
-        max-height: 200px;
-        overflow: auto;
-      }
-      
-      .english-text {
-        background: #f1f8e9;
-        border-left: 4px solid #8bc34a;
-        font-family: monospace;
-        font-size: 11px;
-        max-height: 500px;
-        overflow: auto;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-      }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ff41;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            text-shadow: 0 0 20px #00ff41;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: #7fdbff;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00ff41; }
+            to { text-shadow: 0 0 30px #00ff41, 0 0 40px #00ff41; }
+        }
+
+        .upload-section {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+            animation: pulse 3s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 20px rgba(0, 255, 65, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 65, 0.5); }
+            100% { box-shadow: 0 0 20px rgba(0, 255, 65, 0.3); }
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 20px;
+            background: linear-gradient(45deg, #00ff41, #00d4aa);
+            color: #000;
+            text-align: center;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .file-input-label:hover {
+            background: linear-gradient(45deg, #00d4aa, #00ff41);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 65, 0.4);
+        }
+
+        .submit-btn {
+            background: linear-gradient(45deg, #ff0066, #ff6b35);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .submit-btn:hover {
+            background: linear-gradient(45deg, #ff6b35, #ff0066);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 0, 102, 0.4);
+        }
+
+        .results-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .result-card {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 255, 65, 0.4);
+        }
+
+        .result-card h3 {
+            color: #00ff41;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+
+        .data-display {
+            background: rgba(0, 20, 0, 0.8);
+            border: 1px solid #00ff41;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid #00ff41;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .summary-item strong {
+            color: #00ff41;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .summary-item span {
+            color: #7fdbff;
+            font-size: 1.1rem;
+        }
+
+        .database-section {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff0066;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .save-btn {
+            background: linear-gradient(45deg, #00ff41, #00d4aa);
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .save-btn:hover {
+            background: linear-gradient(45deg, #00d4aa, #00ff41);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 65, 0.4);
+        }
+
+        .save-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .status-success {
+            background: rgba(0, 255, 65, 0.2);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+        }
+
+        .status-error {
+            background: rgba(255, 0, 102, 0.2);
+            border: 1px solid #ff0066;
+            color: #ff0066;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 3px solid rgba(0, 255, 65, 0.3);
+            border-top: 3px solid #00ff41;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(255, 0, 102, 0.2);
+            border: 1px solid #ff0066;
+            color: #ff0066;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 768px) {
+            .results-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #00ff41;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00d4aa;
+        }
     </style>
-  </head>
-  <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-      <div class="container">
-        <a class="navbar-brand" href="#">Intelligent PDF Text Extractor</a>
-      </div>
-    </nav>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PDF Data Extraction</h1>
+            <p>Advanced Contract Data Processing System</p>
+        </div>
 
-    <main class="container mb-5">
-      <div class="row">
-        <div class="col-12 col-lg-6">
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <h5 class="card-title">Upload PDF files for intelligent extraction</h5>
-              <p class="card-text">The system will intelligently extract English text, detect sections, and parse structured data from your PDFs.</p>
-
-              <form method="post" enctype="multipart/form-data" class="mb-3">
+        <div class="upload-section">
+            <form method="post" enctype="multipart/form-data" id="uploadForm">
                 {% csrf_token %}
-                <div class="mb-3">
-                  <label for="pdf_file" class="form-label">Choose PDF</label>
-                  <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept="application/pdf" required>
-                  <div class="form-text">Select a PDF file for extraction.</div>
+                <div class="file-input-wrapper">
+                    <input type="file" name="pdf_file" id="pdfFile" class="file-input" accept=".pdf" required>
+                    <label for="pdfFile" class="file-input-label">
+                        📄 Choose PDF File or Drag & Drop Here
+                    </label>
                 </div>
-
-                <button type="submit" class="btn btn-primary">Upload & Extract</button>
-              </form>
-
-              {% if error %}
-                <div class="alert alert-danger mt-3">
-                  <strong>Error:</strong> {{ error }}
-                </div>
-              {% endif %}
-            </div>
-          </div>
+                <button type="submit" class="submit-btn">🚀 Extract Data</button>
+            </form>
         </div>
 
-        <div class="col-12 col-lg-6">
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <h5 class="card-title">Intelligent Features</h5>
-              <ul>
-                <li><strong>English Text Extraction:</strong> Automatically extracts only English text</li>
-                <li><strong>Section Detection:</strong> Intelligently identifies contract sections</li>
-                <li><strong>Table Parsing:</strong> Extracts structured data from tables</li>
-                <li><strong>Multi-language Support:</strong> Handles Hindi-English bilingual PDFs</li>
-                <li><strong>Structured Output:</strong> Organizes data into clear JSON format</li>
-                <li><strong>No Database Storage:</strong> Focus on extraction and parsing only</li>
-              </ul>
-            </div>
-          </div>
+        {% if error %}
+        <div class="error">
+            <strong>Error:</strong> {{ error }}
         </div>
-      </div>
+        {% endif %}
 
-      <!-- Results area -->
-      {% if uploaded_file %}
-        <div class="row mt-4">
-          <div class="col-12">
-            <div class="card">
-              <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>{{ uploaded_file.name }}</strong>
-                {% if summary %}
-                  <div>
-                    <span class="badge bg-primary metadata-badge">{{ summary.extraction_method }}</span>
-                    {% if summary.ocr_used %}
-                      <span class="badge bg-warning metadata-badge">OCR</span>
-                    {% endif %}
-                    {% if summary.tables_count > 0 %}
-                      <span class="badge bg-success metadata-badge">{{ summary.tables_count }} tables</span>
-                    {% endif %}
-                  </div>
-                {% endif %}
-              </div>
-              
-              <div class="card-body">
-                {% if summary %}
-                  <div class="card summary-card mb-3">
-                    <div class="card-body py-2">
-                      <h6 class="card-title mb-2">Extraction Summary</h6>
-                      <div class="row">
-                        <div class="col-6">
-                          <small><strong>Pages:</strong> {{ summary.pages }}</small><br>
-                          <small><strong>Tables:</strong> {{ summary.tables_count }}</small>
+        {% if parsed_data %}
+        <div class="summary-grid">
+            <div class="summary-item">
+                <strong>Pages</strong>
+                <span>{{ summary.pages }}</span>
+            </div>
+            <div class="summary-item">
+                <strong>Tables Found</strong>
+                <span>{{ summary.tables_count }}</span>
+            </div>
+            <div class="summary-item">
+                <strong>Text Length</strong>
+                <span>{{ summary.english_text_length }} chars</span>
+            </div>
+            <div class="summary-item">
+                <strong>Method</strong>
+                <span>{{ summary.extraction_method }}</span>
+            </div>
+            {% if summary.ocr_used %}
+            <div class="summary-item">
+                <strong>OCR Used</strong>
+                <span>✅ Yes</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="results-section">
+            <div class="result-card">
+                <h3>📄 Extracted English Text</h3>
+                <div class="data-display" id="englishText">{{ english_text }}</div>
+            </div>
+            
+            <div class="result-card">
+                <h3>🔍 Parsed JSON Data</h3>
+                <div class="data-display" id="parsedData">{{ parsed_data|safe }}</div>
+            </div>
+        </div>
+
+        <div class="database-section">
+            <h3>💾 Save to Database</h3>
+            <p>Click the button below to save the extracted data to the database:</p>
+            
+            <button class="save-btn" id="saveToDbBtn" onclick="saveToDatabase()">
+                💾 Save to Database
+            </button>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Saving to database...</p>
+            </div>
+            
+            <div id="statusMessage"></div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Drag and drop functionality
+        const fileInput = document.getElementById('pdfFile');
+        const fileLabel = document.querySelector('.file-input-label');
+
+        fileLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileLabel.style.background = 'linear-gradient(45deg, #00d4aa, #00ff41)';
+        });
+
+        fileLabel.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            fileLabel.style.background = 'linear-gradient(45deg, #00ff41, #00d4aa)';
+        });
+
+        fileLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileLabel.style.background = 'linear-gradient(45deg, #00ff41, #00d4aa)';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                fileLabel.textContent = `📄 ${files[0].name}`;
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                fileLabel.textContent = `📄 ${e.target.files[0].name}`;
+            }
+        });
+
+        // Save to database functionality
+        function saveToDatabase() {
+            const saveBtn = document.getElementById('saveToDbBtn');
+            const loading = document.getElementById('loading');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            // Disable button and show loading
+            saveBtn.disabled = true;
+            loading.style.display = 'block';
+            statusMessage.innerHTML = '';
+            
+            // Prepare data for saving
+            const data = {
+                parsed_data: JSON.parse(document.getElementById('parsedData').textContent),
+                english_text: document.getElementById('englishText').textContent
+            };
+            
+            // Send AJAX request
+            fetch('/pdf_record/save-to-database/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                
+                if (data.success) {
+                    statusMessage.innerHTML = `
+                        <div class="status-message status-success">
+                            ✅ ${data.message}
                         </div>
-                        <div class="col-6">
-                          <small><strong>English Text:</strong> {{ summary.english_text_length }} chars</small><br>
-                          <small><strong>Method:</strong> {{ summary.extraction_method }}</small>
+                    `;
+                } else {
+                    statusMessage.innerHTML = `
+                        <div class="status-message status-error">
+                            ❌ ${data.message}
                         </div>
-                      </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                statusMessage.innerHTML = `
+                    <div class="status-message status-error">
+                        ❌ Error: ${error.message}
                     </div>
-                  </div>
-                {% endif %}
-                
-                {% if english_text %}
-                  <div class="mb-4">
-                    <h6>Extracted English Text (Full)</h6>
-                    <div class="english-text p-3">{{ english_text }}</div>
-                  </div>
-                {% endif %}
-                
-                {% if parsed_data %}
-                  <div class="mb-3">
-                    <h6>Structured Data (JSON)</h6>
-                    <pre class="extracted">{{ parsed_data|safe }}</pre>
-                  </div>
-                {% else %}
-                  <div class="text-muted">No data extracted.</div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-      {% endif %}
-    </main>
+                `;
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+            });
+        }
 
-    <footer class="text-center py-4">
-      <small class="text-muted">Intelligent PDF Text Extractor • Advanced parsing without database storage</small>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  </body>
+        // Add some cyberpunk animations
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add typing effect to header
+            const header = document.querySelector('.header h1');
+            const text = header.textContent;
+            header.textContent = '';
+            
+            let i = 0;
+            const typeWriter = () => {
+                if (i < text.length) {
+                    header.textContent += text.charAt(i);
+                    i++;
+                    setTimeout(typeWriter, 100);
+                }
+            };
+            
+            setTimeout(typeWriter, 500);
+        });
+    </script>
+</body>
 </html>
