@@ -1,7 +1,8 @@
 from django.urls import path
-from .views import upload_pdfs
+from . import views
 
 app_name = 'pdf_record'
 urlpatterns = [
-    path("", upload_pdfs, name="upload_pdfs"),
+    path('', views.upload_pdfs, name='upload_pdfs'),
+    path('save-to-database/', views.save_to_database, name='save_to_database'),
 ]
