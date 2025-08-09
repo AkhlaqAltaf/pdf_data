@@ -490,14 +490,14 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
-        <a class="navbar-brand" href="{% url 'pdf_record:home' %}">PDF Extractor</a>
+        <a class="navbar-brand" href="{% url 'pdf_record:search' %}">PDF Extractor</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'pdf_record:home' %}">Home</a>
+                    <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'pdf_record:search' %}">Home</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if request.path == '/import/' %}active{% endif %}" href="{% url 'pdf_record:import' %}">Import Data</a>
@@ -505,9 +505,9 @@
                 <li class="nav-item">
                     <a class="nav-link {% if request.path == '/view/' %}active{% endif %}" href="{% url 'pdf_record:view' %}">View Data</a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.path == '/search/' %}active{% endif %}" href="{% url 'pdf_record:search' %}">AI Search</a>
-                </li>
+{#                <li class="nav-item">#}
+{#                    <a class="nav-link {% if request.path == '/search/' %}active{% endif %}" href="{% url 'pdf_record:search' %}">AI Search</a>#}
+{#                </li>#}
             </ul>
         </div>
     </div>

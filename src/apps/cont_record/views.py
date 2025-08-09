@@ -18,6 +18,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
+from transformers import pipeline
 
 from src.utils.contract_parsers import parse_contract_text_to_json
 from src.utils.extract_text import read_pdf_with_structure, _extract_english_from_pdf
@@ -663,6 +664,81 @@ class SaveInDb(View):
 class SemanticSearchView(View):
     template_name = "contracts/search.html"
 
+    def generate_clean_summary(self, text, query):
+        print("TEXT : ",text)
+        """Generate a clean, query-focused summary using AI transformers"""
+        # First, try to answer the query directly
+        try:
+            # Initialize QA pipeline
+            qa_pipeline = pipeline(
+                "question-answering",
+                model="deepset/roberta-base-squad2",
+                tokenizer="deepset/roberta-base-squad2"
+            )
+
+            # Try to extract a direct answer
+            answer = qa_pipeline(question=query, context=text[:3000])  # Limit context
+            if answer['score'] > 0.1:  # Minimum confidence threshold
+                return answer['answer']
+        except Exception:
+            pass
+
+        # If QA fails, generate an extractive summary focused on query terms
+        try:
+            # Clean text by removing common PDF artifacts
+            text = re.sub(r'\s+', ' ', text)  # Collapse whitespace
+            text = re.sub(r'[^\w\s.,;:!?()-]', '', text)  # Remove special chars
+
+            # Use extractive summarization focused on query terms
+            from summa import keywords
+            from summa.summarizer import summarize
+
+            # Boost query terms in importance
+            query_keywords = " ".join(set(query.split()))
+            boosted_text = f"{query_keywords}. {text}"
+
+            summary = summarize(
+                boosted_text,
+                ratio=0.2,
+                words=100,
+                split=True
+            )
+
+            if summary:
+                return " ".join(summary)
+        except Exception:
+            pass
+
+        # Fallback: extract sentences containing query terms
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        query_terms = query.lower().split()
+        relevant_sentences = [
+                                 s for s in sentences
+                                 if any(term in s.lower() for term in query_terms)
+                             ][:3]
+
+        return " ".join(relevant_sentences) or "No relevant information found"
+
+    def clean_raw_text(self,text):
+        """Clean and normalize raw text"""
+        if not text:
+            return ""
+
+        # Remove common PDF artifacts
+        text = re.sub(r'\s+', ' ', text)  # Collapse whitespace
+        text = re.sub(r'[^\w\s.,;:!?()-]', '', text)  # Remove special chars
+        text = re.sub(r'\bPage \d+\b', '', text)  # Remove page numbers
+
+        lines = text.split('.')
+        unique_lines = []
+        seen = set()
+        for line in lines:
+            clean_line = line.strip()
+            if clean_line and clean_line not in seen:
+                unique_lines.append(clean_line)
+                seen.add(clean_line)
+
+        return '. '.join(unique_lines)
     def get_model(self):
         if SentenceTransformer is None:
             return None
@@ -707,17 +783,42 @@ class SemanticSearchView(View):
             )
             results = [
                 {
+                    'raw_text':c.raw_text,
                     'contract_no': c.contract_no,
                     'generated_date': c.generated_date.isoformat() if c.generated_date else '',
                     'score': 0.0,
                 }
                 for c in qs[:top_k]
             ]
-            summary = (
-                f"Top match: {results[0]['contract_no']} dated {results[0]['generated_date']}"
-                if results else "No relevant contracts found"
-            )
-            return JsonResponse({"success": True, "results": results, "summary": summary})
+            top_summary = ""
+
+            if results:
+                print("HELLO ...",results)
+                top_c = qs.first()
+                top_summary = self.generate_clean_summary(self.clean_raw_text(results[0].get('raw_text')))
+
+            summary =top_summary
+
+            print("SUMMERY : ",summary)
+            return JsonResponse({"success": True, "results": results, "summary": summary, "top_summary": top_summary})
+
+        # Optional: parse date in query to bias ranking
+        wanted_date = None
+        try:
+            mdate = re.search(r'(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4})', query)
+            if mdate:
+                txt = mdate.group(0)
+                # normalize to YYYY-MM-DD
+                if '-' in txt and len(txt.split('-')[0]) == 4:
+                    wanted_date = datetime.fromisoformat(txt).date()
+                else:
+                    parts = re.split(r'[\-/]', txt)
+                    if len(parts[-1]) == 2:
+                        parts[-1] = '20' + parts[-1]
+                    d, m, y = [int(x) for x in parts]
+                    wanted_date = datetime(y, m, d).date()
+        except Exception:
+            wanted_date = None
 
         # Build corpus of searchable texts with references
         corpus = []
@@ -737,6 +838,8 @@ class SemanticSearchView(View):
                 'id': c.id,
                 'contract_no': c.contract_no,
                 'generated_date': c.generated_date.isoformat() if c.generated_date else '',
+                'date_obj': c.generated_date,
+                'type': 'contract',
             })
 
         # Add product names and notes as separate entries linked to their contract
@@ -754,15 +857,42 @@ class SemanticSearchView(View):
                 'id': p.contract_id,
                 'contract_no': p.contract.contract_no if p.contract_id else '',
                 'generated_date': p.contract.generated_date.isoformat() if p.contract and p.contract.generated_date else '',
+                'date_obj': p.contract.generated_date if p.contract else None,
+                'type': 'product',
             })
 
         if not corpus:
             return JsonResponse({"success": True, "results": [], "summary": "No data indexed yet"})
 
+        # Use precomputed embeddings when available for contracts/products
         query_vec = model.encode([query], normalize_embeddings=True)
-        corpus_vecs = model.encode(corpus, normalize_embeddings=True)
+        # Compute corpus embeddings in batches for memory safety
+        batch_size = 256
+        corpus_vecs = []
+        for i in range(0, len(corpus), batch_size):
+            batch = corpus[i:i+batch_size]
+            vecs = model.encode(batch, normalize_embeddings=True)
+            corpus_vecs.append(vecs)
+        corpus_vecs = np.vstack(corpus_vecs)
         # cosine similarity
         sims = (query_vec @ corpus_vecs.T)[0]
+
+        # Apply date bias if query contained a date
+        if wanted_date is not None:
+            bias = np.zeros_like(sims)
+            for i, ref in enumerate(refs):
+                d = ref.get('date_obj')
+                if not d:
+                    continue
+                if d == wanted_date:
+                    bias[i] = 0.2
+                elif d.year == wanted_date.year and d.month == wanted_date.month:
+                    bias[i] = 0.1
+                else:
+                    delta = abs((d - wanted_date).days)
+                    if delta <= 14:
+                        bias[i] = max(0.0, 0.1 * (1 - delta / 14.0))
+            sims = sims + bias
         top_idx = np.argsort(-sims)[:top_k]
 
         seen_contracts = set()
@@ -781,11 +911,34 @@ class SemanticSearchView(View):
             if len(results) >= top_k:
                 break
 
-        # short summary
+        # short summary and top summary text
+        top_summary = ""
         if results:
             summary = f"Top match: {results[0]['contract_no']} dated {results[0]['generated_date']} (score {results[0]['score']:.3f})"
+            try:
+                top_ref = refs[top_idx.tolist()[0]]
+                top_contract = Contract.objects.filter(id=top_ref['id']).first()
+                if top_contract and top_contract.raw_text:
+                    cleaned_text = self.clean_raw_text(top_contract.raw_text)
+                    top_summary = self.generate_clean_summary(cleaned_text, query)
+            except Exception as e:
+                print(f"Error generating semantic summary: {str(e)}")
+                # Fallback to sentence extraction
+                if top_contract and top_contract.raw_text:
+                    text = top_contract.raw_text
+                    sentences = re.split(r'(?<=[.!?])\s+', text)
+                    query_terms = query.lower().split()
+                    relevant_sentences = [
+                                             s for s in sentences
+                                             if any(term in s.lower() for term in query_terms)
+                                         ][:3]
+                    top_summary = " ".join(relevant_sentences) or "No relevant information found"
         else:
             summary = "No relevant contracts found"
-
-        return JsonResponse({"success": True, "results": results, "summary": summary})
-
+        print("SUMMARY : ",summary)
+        return JsonResponse({
+            "success": True,
+            "results": results,
+            "summary": top_summary,
+            "top_summary": top_summary
+        })
