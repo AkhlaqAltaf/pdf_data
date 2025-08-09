@@ -1,27 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Data Extraction - Cyberpunk Interface</title>
-</head>
-<body>
+{% extends 'contracts/base.html' %}
+{% block title %}Import Data{% endblock %}
+
+{% block content %}
+
     <div class="container">
-        <div class="header">
-            <h1>PDF Data Extraction</h1>
-            <p>Advanced Contract Data Processing System</p>
-        </div>
+       
 
         <div class="upload-section">
             <form method="post" enctype="multipart/form-data" id="uploadForm">
                 {% csrf_token %}
                 <div class="file-input-wrapper">
-                    <input type="file" name="pdf_file" id="pdfFile" class="file-input" accept=".pdf" required>
+                    <input type="file" name="data_file" id="pdfFile" class="file-input" accept=".pdf,.zip" required>
                     <label for="pdfFile" class="file-input-label">
-                        📄 Choose PDF File or Drag & Drop Here
+                         Choose PDF File or Drag & Drop Here
                     </label>
                 </div>
-                <button type="submit" class="submit-btn">🚀 Extract Data</button>
+                <button type="submit" class="submit-btn">Extract Data</button>
             </form>
         </div>
 
@@ -32,88 +26,39 @@
         {% endif %}
 
         {% if parsed_data %}
-        <!-- Action Buttons Section - Above Results -->
-        <div class="action-buttons-section">
-            <h3>🚀 Data Actions</h3>
-            <div class="action-buttons-grid">
-                <div class="action-button-card">
-                    <h4>💾 Save to Database</h4>
-                    <p>Store the extracted data in the database</p>
-                    <button class="save-btn" id="saveToDbBtn" onclick="saveToDatabase()">
-                        💾 Save to Database
-                    </button>
+                  
+                      <div class="action-buttons">
+                        <button class="action-btn save-btn"  id="saveToDbBtn" onclick="saveToDatabase()">
+                            <i class="fas fa-save"></i>Save to Database
+                        </button>
+                      </div>
                     <div class="loading" id="loading">
                         <div class="spinner"></div>
                         <p>Saving to database...</p>
                     </div>
                     <div id="statusMessage"></div>
                 </div>
-                
-                <div class="action-button-card">
-                    <h4>📊 Export to Excel</h4>
-                    <p>Download data as Excel file with multiple sheets</p>
-                    <button class="save-btn" id="exportExcelBtn" onclick="exportToExcel()" style="background: linear-gradient(45deg, #ff6b35, #f7931e);">
-                        📊 Export to Excel
-                    </button>
-                    <div class="loading" id="loadingExcel" style="display: none;">
-                        <div class="spinner"></div>
-                        <p>Generating Excel file...</p>
-                    </div>
-                    <div id="excelStatusMessage"></div>
-                </div>
-                
-                <div class="action-button-card">
-                    <h4>📋 View Data Details</h4>
-                    <p>Navigate to detailed data view</p>
-                    <button class="save-btn" onclick="viewDataDetails()" style="background: linear-gradient(45deg, #9c27b0, #673ab7);">
-                        📋 View Details
-                    </button>
-                </div>
-                
-                <div class="action-button-card">
-                    <h4>📊 All Data Table</h4>
-                    <p>View all data in single organized table</p>
-                    <button class="save-btn" onclick="viewAllDataTable()" style="background: linear-gradient(45deg, #00bcd4, #009688);">
-                        📊 All Data Table
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="summary-grid">
-            <div class="summary-item">
-                <strong>Pages</strong>
-                <span>{{ summary.pages }}</span>
-            </div>
-            <div class="summary-item">
-                <strong>Tables Found</strong>
-                <span>{{ summary.tables_count }}</span>
-            </div>
-            <div class="summary-item">
-                <strong>Text Length</strong>
-                <span>{{ summary.english_text_length }} chars</span>
-            </div>
-            <div class="summary-item">
-                <strong>Method</strong>
-                <span>{{ summary.extraction_method }}</span>
-            </div>
-            {% if summary.ocr_used %}
-            <div class="summary-item">
-                <strong>OCR Used</strong>
-                <span>✅ Yes</span>
-            </div>
-            {% endif %}
-        </div>
 
         <div class="results-section">
-            <div class="result-card">
-                <h3>📄 Extracted English Text</h3>
+                           <div class="card">
+                            
+                            
+                            <div class="card-body">
+                                <div class="card-header">
+                                 Extracted English Text</div>
                 <div class="data-display" id="englishText">{{ english_text }}</div>
+                                    
             </div>
+                                </div>
             
-            <div class="result-card">
-                <h3>🔍 Parsed JSON Data</h3>
+            <div class="card">
+                                            <div class="card-body">
+
+                   <div class="card-header">
+                                 Extracted English Text</div>
+                
                 <div class="data-display" id="parsedData">{{ parsed_data|safe }}</div>
+                                            </div>
             </div>
         </div>
         {% endif %}
@@ -169,9 +114,8 @@
             
             // Get CSRF token
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-            
-            // Send AJAX request
-            fetch('/pdf_record/save-to-database/', {
+        
+            fetch('/save-to-database/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -339,5 +283,5 @@
             setTimeout(typeWriter, 500);
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

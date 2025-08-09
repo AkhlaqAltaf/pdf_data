@@ -17,9 +17,15 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from django.urls.conf import include
+from django.conf import settings
+from django.conf.urls.static import static
 from src.apps.cont_record import urls
 urlpatterns = [
+    path("", include("src.apps.cont_record.urls", namespace="pdf_record")),
+
     path('admin/', admin.site.urls),
-    path("pdf_record/", include("src.apps.cont_record.urls", namespace="pdf_record")),
 
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

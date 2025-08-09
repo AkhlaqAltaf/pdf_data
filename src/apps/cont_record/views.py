@@ -1,536 +1,791 @@
-# contracts/views.py
-from django.views.generic import TemplateView
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.http import JsonResponse, HttpResponse
-from django.core.files.storage import FileSystemStorage
-from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime
 import json
-import pandas as pd
-from io import BytesIO
+import os
 import re
+import zipfile
+from datetime import datetime
+from decimal import Decimal
+from io import BytesIO
+from urllib.parse import urlparse
+import pandas as pd
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from django.db import transaction, connection
+from django.db.models import Q
+from django.http import JsonResponse, HttpResponse
+from django.shortcuts import render
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 
 from src.utils.contract_parsers import parse_contract_text_to_json
 from src.utils.extract_text import read_pdf_with_structure, _extract_english_from_pdf
 from .models import (
-    Contract, OrganisationDetail, BuyerDetail, FinancialApproval, 
-    PayingAuthority, SellerDetail, Product, ProductSpecification, 
-    ConsigneeDetail, EPBGDetail, TermsAndCondition
+    Contract, OrganisationDetail, BuyerDetail, FinancialApproval,
+    PayingAuthority, SellerDetail, Product, ProductSpecification,
+    ConsigneeDetail, EPBGDetail, TermsAndCondition, PdfFile
 )
+from ...utils.save_data_helper import safe_str
+from ...utils.save_helper import extract_from_tables, parse_int, parse_decimal, extract_email, \
+    extract_phone, parse_date
+from ...utils.table_helper import safe_decimal_from_raw, safe_int_from_raw
 
+try:
+    from sentence_transformers import SentenceTransformer
+    import numpy as np
+except Exception:
+    SentenceTransformer = None
+    np = None
 
-def upload_pdfs(request):
-    if request.method == 'POST':
-        uploaded_file = request.FILES.get('pdf_file')
-        
-        if uploaded_file and uploaded_file.name.endswith('.pdf'):
-            # Save the uploaded file temporarily
-            fs = FileSystemStorage()
-            filename = fs.save(uploaded_file.name, uploaded_file)
-            file_path = fs.path(filename)
-            
-            try:
-                # Extract text and tables from PDF
-                extraction_result = read_pdf_with_structure(file_path)
-                raw_text = extraction_result['text']
-                tables = extraction_result.get('tables', [])
-                
-                # Extract English-only text
-                english_text = _extract_english_from_pdf(raw_text)
-                
-                # Parse the English text to JSON
-                parsed_data = parse_contract_text_to_json(english_text, tables)
-                
-                # Prepare context for template
-                context = {
-                    'uploaded_file': uploaded_file,
-                    'extraction_result': extraction_result,
-                    'parsed_data': json.dumps(parsed_data, indent=2, ensure_ascii=False),
-                    'english_text': english_text,  # Show FULL English text
-                    'english_text_length': len(english_text),
-                    'summary': {
-                        'pages': extraction_result.get('pages_count', 0),
-                        'tables_count': len(tables),
-                        'english_text_length': len(english_text),
-                        'extraction_method': extraction_result.get('method', 'unknown'),
-                        'ocr_used': extraction_result.get('ocr_used', False)
-                    }
-                }
-                
-                # Clean up the temporary file
-                fs.delete(filename)
-                
-                return render(request, 'contracts/upload_pdfs.html', context)
-                
-            except Exception as e:
-                # Clean up the temporary file in case of error
-                fs.delete(filename)
-                context = {
-                    'error': f'Error processing PDF: {str(e)}'
-                }
-                return render(request, 'contracts/upload_pdfs.html', context)
-        else:
-            context = {
-                'error': 'Please upload a valid PDF file.'
-            }
-            return render(request, 'contracts/upload_pdfs.html', context)
-    
-    return render(request, 'contracts/upload_pdfs.html')
+_EMBEDDER = None
 
-
-@csrf_exempt
-def save_to_database(request):
-    """Save extracted JSON data to database"""
-    if request.method == 'POST':
+def get_embedder():
+    global _EMBEDDER
+    if SentenceTransformer is None:
+        return None
+    if _EMBEDDER is None:
         try:
-            data = json.loads(request.body)
-            parsed_data = data.get('parsed_data', {})
-            
-            # Extract contract data
-            contract_data = parsed_data.get('contract', {})
-            contract_no = contract_data.get('contract_no', '')
-            
-            if not contract_no:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Contract number is required'
-                })
-            
-            # Check if contract already exists
-            contract, created = Contract.objects.get_or_create(
-                contract_no=contract_no,
-                defaults={
-                    'generated_date': _parse_date(contract_data.get('generated_date')),
-                    'raw_text': data.get('english_text', '')
-                }
-            )
-            
-            # Update contract if it already exists
-            if not created:
-                contract.generated_date = _parse_date(contract_data.get('generated_date'))
-                contract.raw_text = data.get('english_text', '')
-                contract.save()
-            
-            # Save Organisation Details
-            org_data = parsed_data.get('organisation', {})
-            org_detail, _ = OrganisationDetail.objects.get_or_create(
-                contract=contract,
-                defaults={
-                    'type': org_data.get('type', ''),
-                    'ministry': org_data.get('ministry', ''),
-                    'department': org_data.get('department', ''),
-                    'organisation_name': org_data.get('organisation_name', ''),
-                    'office_zone': org_data.get('office', '')
-                }
-            )
-            
-            # Save Buyer Details
-            buyer_data = parsed_data.get('buyer', {})
-            buyer_detail, _ = BuyerDetail.objects.get_or_create(
-                contract=contract,
-                defaults={
-                    'designation': buyer_data.get('designation', ''),
-                    'contact_no': buyer_data.get('contact_no', ''),
-                    'email': buyer_data.get('email', ''),
-                    'gstin': buyer_data.get('gstin', ''),
-                    'address': buyer_data.get('address', '')
-                }
-            )
-            
-            # Save Financial Approval
-            financial_data = parsed_data.get('financial_approval', {})
-            financial_approval, _ = FinancialApproval.objects.get_or_create(
-                contract=contract,
-                defaults={
-                    'ifd_concurrence': financial_data.get('ifd_concurrence', False),
-                    'admin_approval_designation': financial_data.get('admin_approval_designation', ''),
-                    'financial_approval_designation': financial_data.get('financial_approval_designation', '')
-                }
-            )
-            
-            # Save Paying Authority
-            paying_data = parsed_data.get('paying_authority', {})
-            paying_authority, _ = PayingAuthority.objects.get_or_create(
-                contract=contract,
-                defaults={
-                    'role': paying_data.get('role', ''),
-                    'payment_mode': paying_data.get('payment_mode', ''),
-                    'designation': paying_data.get('designation', ''),
-                    'email': paying_data.get('email', ''),
-                    'gstin': paying_data.get('gstin', ''),
-                    'address': paying_data.get('address', '')
-                }
-            )
-            
-            # Save Seller Details
-            seller_data = parsed_data.get('seller', {})
-            seller_detail, _ = SellerDetail.objects.get_or_create(
-                contract=contract,
-                defaults={
-                    'gem_seller_id': seller_data.get('gem_seller_id', ''),
-                    'company_name': seller_data.get('seller_name', ''),
-                    'contact_no': seller_data.get('contact_no', ''),
-                    'email': seller_data.get('email', ''),
-                    'address': seller_data.get('address', ''),
-                    'msme_registration_number': seller_data.get('msme_registration_number', ''),
-                    'gstin': seller_data.get('gstin', '')
-                }
-            )
-            
-            # Save Products
-            products_data = parsed_data.get('products', [])
-            for product_data in products_data:
-                product, _ = Product.objects.get_or_create(
-                    contract=contract,
-                    product_name=product_data.get('product_name', 'Unknown Product'),
-                    defaults={
-                        'brand': product_data.get('brand', ''),
-                        'brand_type': product_data.get('brand_type', ''),
-                        'catalogue_status': product_data.get('catalogue_status', ''),
-                        'selling_as': product_data.get('selling_as', ''),
-                        'category_name_quadrant': product_data.get('category_name_quadrant', ''),
-                        'model': product_data.get('model', ''),
-                        'hsn_code': product_data.get('hsn_code', ''),
-                        'ordered_quantity': _parse_int(product_data.get('ordered_quantity')),
-                        'unit': product_data.get('unit', ''),
-                        'unit_price': _parse_decimal(product_data.get('unit_price')),
-                        'tax_bifurcation': _parse_decimal(product_data.get('tax_bifurcation')),
-                        'total_price': _parse_decimal(product_data.get('total_price')),
-                        'note': product_data.get('note', '')
-                    }
-                )
-                
-                # Save Product Specifications
-                specs_data = parsed_data.get('specifications', [])
-                for spec_data in specs_data:
-                    ProductSpecification.objects.get_or_create(
-                        product=product,
-                        category=spec_data.get('category', ''),
-                        sub_spec=spec_data.get('sub_spec', ''),
-                        value=spec_data.get('value', '')
-                    )
-                
-                # Save Consignee Details
-                consignees_data = parsed_data.get('consignees', [])
-                for consignee_data in consignees_data:
-                    ConsigneeDetail.objects.get_or_create(
-                        product=product,
-                        s_no=consignee_data.get('s_no'),
-                        defaults={
-                            'designation': consignee_data.get('designation', ''),
-                            'email': consignee_data.get('email', ''),
-                            'contact': consignee_data.get('contact', ''),
-                            'gstin': consignee_data.get('gstin', ''),
-                            'address': consignee_data.get('address', ''),
-                            'lot_no': consignee_data.get('lot_no', ''),
-                            'quantity': _parse_int(consignee_data.get('quantity')),
-                            'delivery_start': _parse_date(consignee_data.get('delivery_start')),
-                            'delivery_end': _parse_date(consignee_data.get('delivery_end')),
-                            'delivery_to': consignee_data.get('delivery_to', '')
+            _EMBEDDER = SentenceTransformer('all-MiniLM-L6-v2')
+        except Exception:
+            _EMBEDDER = None
+    return _EMBEDDER
+
+
+class ImportDataView(View):
+    template_name = "contracts/import_data.html"
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+    def post(self, request):
+        uploaded_files = request.FILES.getlist("data_file")
+
+        print("UPLOADED FILE...")
+        fs = FileSystemStorage()
+        all_results = []
+
+        if not uploaded_files:
+            return render(request, self.template_name, {"error": "Please upload at least one PDF or ZIP file."})
+
+        for uploaded_file in uploaded_files:
+            temp_files = []
+            saved_file = None
+
+            try:
+                # Handle ZIP file: extract only PDFs
+                if uploaded_file.name.lower().endswith(".zip"):
+                    zip_filename = fs.save(uploaded_file.name, uploaded_file)
+                    zip_path = fs.path(zip_filename)
+
+                    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                        for member in zip_ref.namelist():
+                            if member.lower().endswith(".pdf"):
+                                extracted_path = os.path.join(settings.MEDIA_ROOT, member)
+                                os.makedirs(os.path.dirname(extracted_path), exist_ok=True)
+                                zip_ref.extract(member, settings.MEDIA_ROOT)
+                                temp_files.append(extracted_path)
+
+                    fs.delete(zip_filename)  # remove zip after extraction
+
+                # Handle single/multiple PDF files
+                elif uploaded_file.name.lower().endswith(".pdf"):
+                    saved_file = PdfFile.objects.create(pdf_file=uploaded_file)
+
+                    pdf_filename = fs.save(uploaded_file.name, uploaded_file)
+
+                    pdf_path = fs.path(pdf_filename)
+                    temp_files.append(pdf_path)
+                else:
+                    return render(request, self.template_name, {"error": "Only PDF or ZIP files are allowed."})
+
+                # Process each PDF
+                for pdf_file in temp_files:
+                    try:
+
+                        extraction_result = read_pdf_with_structure(pdf_file)
+                        raw_text = extraction_result["text"]
+                        tables = extraction_result.get("tables", [])
+
+                        english_text = _extract_english_from_pdf(raw_text)
+                        parsed_data = parse_contract_text_to_json(english_text, tables)
+                        source_file_id = saved_file.id if (saved_file and getattr(saved_file, 'pdf_file', None)) else ""
+                        parsed_data = {
+                            "source_file": source_file_id,
+                            **parsed_data
                         }
-                    )
-            
-            # Save EPBG Details
-            epbg_data = parsed_data.get('epbg', '')
-            if epbg_data:
-                EPBGDetail.objects.get_or_create(
-                    contract=contract,
-                    defaults={'detail': epbg_data}
-                )
-            
-            # Save Terms and Conditions
-            terms_data = parsed_data.get('terms', [])
-            for term_text in terms_data:
-                TermsAndCondition.objects.get_or_create(
-                    contract=contract,
-                    clause_text=term_text
-                )
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Contract {contract_no} saved successfully!',
-                'contract_id': contract.id
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': f'Error saving to database: {str(e)}'
-            })
-    
-    return JsonResponse({
-        'success': False,
-        'message': 'Invalid request method'
-    })
-
-
-@csrf_exempt
-def export_to_excel(request):
-    """Export extracted data to Excel file"""
-    if request.method == 'POST':
-        try:
-            print("Export to Excel request received")
-            data = json.loads(request.body)
-            parsed_data = data.get('parsed_data', {})
-            print(f"Parsed data keys: {list(parsed_data.keys())}")
-            
-            # Create Excel writer
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                
-                # Contract Information Sheet
-                contract_data = parsed_data.get('contract', {})
-                contract_df = pd.DataFrame([{
-                    'Contract Number': contract_data.get('contract_no', ''),
-                    'Generated Date': contract_data.get('generated_date', ''),
-                }])
-                contract_df.to_excel(writer, sheet_name='Contract Info', index=False)
-                
-                # Organization Details Sheet
-                org_data = parsed_data.get('organisation', {})
-                org_df = pd.DataFrame([{
-                    'Type': org_data.get('type', ''),
-                    'Ministry': org_data.get('ministry', ''),
-                    'Department': org_data.get('department', ''),
-                    'Organization Name': org_data.get('organisation_name', ''),
-                    'Office': org_data.get('office', '')
-                }])
-                org_df.to_excel(writer, sheet_name='Organization Details', index=False)
-                
-                # Buyer Details Sheet
-                buyer_data = parsed_data.get('buyer', {})
-                buyer_df = pd.DataFrame([{
-                    'Designation': buyer_data.get('designation', ''),
-                    'Contact Number': buyer_data.get('contact_no', ''),
-                    'Email': buyer_data.get('email', ''),
-                    'GSTIN': buyer_data.get('gstin', ''),
-                    'Address': buyer_data.get('address', '')
-                }])
-                buyer_df.to_excel(writer, sheet_name='Buyer Details', index=False)
-                
-                # Financial Approval Sheet
-                financial_data = parsed_data.get('financial_approval', {})
-                financial_df = pd.DataFrame([{
-                    'IFD Concurrence': financial_data.get('ifd_concurrence', ''),
-                    'Admin Approval Designation': financial_data.get('admin_approval_designation', ''),
-                    'Financial Approval Designation': financial_data.get('financial_approval_designation', '')
-                }])
-                financial_df.to_excel(writer, sheet_name='Financial Approval', index=False)
-                
-                # Paying Authority Sheet
-                paying_data = parsed_data.get('paying_authority', {})
-                paying_df = pd.DataFrame([{
-                    'Role': paying_data.get('role', ''),
-                    'Payment Mode': paying_data.get('payment_mode', ''),
-                    'Designation': paying_data.get('designation', ''),
-                    'Email': paying_data.get('email', ''),
-                    'GSTIN': paying_data.get('gstin', ''),
-                    'Address': paying_data.get('address', '')
-                }])
-                paying_df.to_excel(writer, sheet_name='Paying Authority', index=False)
-                
-                # Seller Details Sheet
-                seller_data = parsed_data.get('seller', {})
-                seller_df = pd.DataFrame([{
-                    'GEM Seller ID': seller_data.get('gem_seller_id', ''),
-                    'Company Name': seller_data.get('seller_name', ''),
-                    'Contact Number': seller_data.get('contact_no', ''),
-                    'Email': seller_data.get('email', ''),
-                    'Address': seller_data.get('address', ''),
-                    'MSME Registration': seller_data.get('msme_registration_number', ''),
-                    'GSTIN': seller_data.get('gstin', '')
-                }])
-                seller_df.to_excel(writer, sheet_name='Seller Details', index=False)
-                
-                # Products Sheet
-                products_data = parsed_data.get('products', [])
-                if products_data:
-                    products_df = pd.DataFrame(products_data)
-                    products_df.to_excel(writer, sheet_name='Products', index=False)
-                else:
-                    # Create empty products sheet
-                    pd.DataFrame(columns=['Product Name', 'Brand', 'Quantity', 'Unit Price', 'Total Price']).to_excel(
-                        writer, sheet_name='Products', index=False
-                    )
-                
-                # Specifications Sheet
-                specs_data = parsed_data.get('specifications', [])
-                if specs_data:
-                    specs_df = pd.DataFrame(specs_data)
-                    specs_df.to_excel(writer, sheet_name='Specifications', index=False)
-                else:
-                    # Create empty specifications sheet
-                    pd.DataFrame(columns=['Category', 'Sub Spec', 'Value']).to_excel(
-                        writer, sheet_name='Specifications', index=False
-                    )
-                
-                # Consignees Sheet
-                consignees_data = parsed_data.get('consignees', [])
-                if consignees_data:
-                    consignees_df = pd.DataFrame(consignees_data)
-                    consignees_df.to_excel(writer, sheet_name='Consignees', index=False)
-                else:
-                    # Create empty consignees sheet
-                    pd.DataFrame(columns=['Designation', 'Email', 'Contact', 'Address', 'Delivery To']).to_excel(
-                        writer, sheet_name='Consignees', index=False
-                    )
-                
-                # EPBG Details Sheet
-                epbg_data = parsed_data.get('epbg', '')
-                epbg_df = pd.DataFrame([{'EPBG Details': epbg_data}])
-                epbg_df.to_excel(writer, sheet_name='EPBG Details', index=False)
-                
-                # Terms and Conditions Sheet
-                terms_data = parsed_data.get('terms', [])
-                if terms_data:
-                    terms_df = pd.DataFrame({'Terms and Conditions': terms_data})
-                    terms_df.to_excel(writer, sheet_name='Terms & Conditions', index=False)
-                else:
-                    # Create empty terms sheet
-                    pd.DataFrame(columns=['Terms and Conditions']).to_excel(
-                        writer, sheet_name='Terms & Conditions', index=False
-                    )
-                
-                # Raw Data Sheet
-                raw_data = {
-                    'Extracted English Text': [data.get('english_text', '')],
-                    'JSON Data': [json.dumps(parsed_data, indent=2)]
-                }
-                raw_df = pd.DataFrame(raw_data)
-                raw_df.to_excel(writer, sheet_name='Raw Data', index=False)
-            
-            # Prepare response
-            output.seek(0)
-            contract_no = parsed_data.get('contract', {}).get('contract_no', 'unknown')
-            filename = f"contract_data_{contract_no}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            
-            response = HttpResponse(
-                output.read(),
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            
-            return response
-            
-        except Exception as e:
-            print(f"Export to Excel error: {str(e)}")
-            return JsonResponse({
-                'success': False,
-                'message': f'Error exporting to Excel: {str(e)}'
-            })
-    
-    return JsonResponse({
-        'success': False,
-        'message': 'Invalid request method'
-    })
-
-
-def _parse_date(date_str):
-    """Parse date string to Date object"""
-    if not date_str:
-        return None
-    
-    try:
-        # Try different date formats
-        date_formats = ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d']
-        for fmt in date_formats:
-            try:
-                return datetime.strptime(date_str, fmt).date()
-            except ValueError:
-                continue
-        return None
-    except:
-        return None
-
-
-def _parse_int(value):
-    """Parse string to integer"""
-    if not value:
-        return None
-    
-    try:
-        # Remove non-numeric characters except decimal point
-        cleaned = re.sub(r'[^\d.]', '', str(value))
-        return int(float(cleaned))
-    except:
-        return None
-
-
-def _parse_decimal(value):
-    """Parse string to Decimal"""
-    if not value:
-        return None
-    
-    try:
-        # Remove non-numeric characters except decimal point
-        cleaned = re.sub(r'[^\d.]', '', str(value))
-        return float(cleaned)
-    except:
-        return None
-
-
-def data_details(request):
-    """Display detailed data view with navigation"""
-    return render(request, 'contracts/data_details.html')
-
-
-def all_data_table(request):
-    """Display all extracted data in a single organized table"""
-    return render(request, 'contracts/all_data_table.html')
-
-
-@csrf_exempt
-def export_all_data_excel(request):
-    """Export all data to single Excel sheet"""
-    if request.method == 'POST':
-        try:
-            print("Export All Data to Excel request received")
-            data = json.loads(request.body)
-            all_data = data.get('all_data', [])
-            
-            # Create Excel writer
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                
-                # Create DataFrame from all data
-                df_data = []
-                for row in all_data:
-                    if row['field'] and row['value']:  # Skip section headers
-                        df_data.append({
-                            'Section': row['section'],
-                            'Field': row['field'],
-                            'Value': row['value']
+                        all_results.append({
+                            "filename": os.path.basename(pdf_file),
+                            "parsed_data": json.dumps(parsed_data, indent=2, ensure_ascii=False),
+                            "english_text": english_text,
+                            "summary": {
+                                "pages": extraction_result.get("pages_count", 0),
+                                "tables_count": len(tables),
+                                "english_text_length": len(english_text),
+                                "extraction_method": extraction_result.get("method", "unknown"),
+                                "ocr_used": extraction_result.get("ocr_used", False)
+                            }
                         })
-                
-                df = pd.DataFrame(df_data)
-                df.to_excel(writer, sheet_name='All Contract Data', index=False)
-            
-            # Prepare response
-            output.seek(0)
-            filename = f"all_contract_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            
-            response = HttpResponse(
-                output.read(),
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            
-            return response
-            
-        except Exception as e:
-            print(f"Export All Data to Excel error: {str(e)}")
-            return JsonResponse({
-                'success': False,
-                'message': f'Error exporting to Excel: {str(e)}'
+                    finally:
+                        if os.path.exists(pdf_file):
+                            os.remove(pdf_file)
+
+            except Exception as e:
+                return render(request, self.template_name, {"error": f"Error processing file {uploaded_file.name}: {str(e)}"})
+
+        # If only one file was uploaded, show it directly
+        if len(all_results) == 1:
+            return render(request, self.template_name, all_results[0])
+
+        # If multiple, pass all results
+        return render(request, self.template_name, {"multiple_results": all_results})
+
+
+
+
+
+
+
+class ContractTableView(View):
+    template_name = "contracts/contract_table.html"
+
+    def get(self, request):
+        search_query = request.GET.get("search", "").strip()
+        org_filter = request.GET.get("organisation_name", "").strip()
+        dept_filter = request.GET.get("department", "").strip()
+        ministry_filter = request.GET.get("ministry", "").strip()
+        date_from = request.GET.get("date_from", "").strip()
+        date_to = request.GET.get("date_to", "").strip()
+
+        contracts_qs = Contract.objects.select_related(
+            "organization_details", "buyer", "financial_approval",
+            "paying_authority", "seller", "epbg"
+        )
+
+        if org_filter:
+            contracts_qs = contracts_qs.filter(organization_details__organisation_name__icontains=org_filter)
+        if dept_filter:
+            contracts_qs = contracts_qs.filter(organization_details__department__icontains=dept_filter)
+        if ministry_filter:
+            contracts_qs = contracts_qs.filter(organization_details__ministry__icontains=ministry_filter)
+        # Date range filter
+        if date_from:
+            try:
+                df = datetime.strptime(date_from, "%Y-%m-%d").date()
+                contracts_qs = contracts_qs.filter(generated_date__gte=df)
+            except Exception:
+                pass
+        if date_to:
+            try:
+                dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+                contracts_qs = contracts_qs.filter(generated_date__lte=dt)
+            except Exception:
+                pass
+
+        if search_query:
+            contracts_qs = contracts_qs.filter(
+                Q(contract_no__icontains=search_query)
+                | Q(raw_text__icontains=search_query)
+                | Q(organization_details__organisation_name__icontains=search_query)
+                | Q(organization_details__department__icontains=search_query)
+                | Q(organization_details__ministry__icontains=search_query)
+                | Q(seller__company_name__icontains=search_query)
+                | Q(buyer__email__icontains=search_query)
+                | Q(products__product_name__icontains=search_query)
+            ).distinct()
+
+        rows = []
+        for c in contracts_qs:
+            raw_rows = Product.objects.filter(contract_id=c.id).values_list('total_price', 'ordered_quantity')
+            total_value = Decimal('0')
+            total_qty = 0
+            for total_price_raw, ordered_qty_raw in raw_rows:
+                total_value += safe_decimal_from_raw(total_price_raw)
+                total_qty += safe_int_from_raw(ordered_qty_raw)
+                first_product = None
+                first_consignee_addr = ""
+                first_category = ""
+                contract_period = ""
+                try:
+                    first_product = c.products.first()
+                    if first_product:
+                        first_category = getattr(first_product, "category_name_quadrant", "") or ""
+                        fc = first_product.consignees.first()
+                        if fc:
+                            first_consignee_addr = getattr(fc, "address", "") or ""
+                            ds = getattr(fc, "delivery_start", None)
+                            de = getattr(fc, "delivery_end", None)
+                            if ds and de:
+                                contract_period = f"{ds} - {de}"
+                except Exception:
+                    first_product = None
+
+                source_file = c.file.pdf_file.url if c.file else ""
+                # get filename safely
+                source_filename = ""
+                if source_file:
+                    try:
+                        # handle urls like /media/pdf_files/foo.pdf
+                        source_filename = os.path.basename(urlparse(source_file).path)
+                    except Exception:
+                        source_filename = source_file
+
+            rows.append({
+                "contract_obj": c,
+                "dated": c.generated_date.isoformat() if c.generated_date else "",
+                "source_file": c.file.pdf_file.url,
+                "source_filename": source_filename,
+                "bid_number": c.contract_no,
+                "buyer_email": getattr(c.buyer, "email", ""),
+                "beneficiary": getattr(c.seller, "company_name", ""),
+                "delivery_address": first_consignee_addr,
+                "office_name": getattr(c.organization_details, "office_zone", ""),
+                "ministry": getattr(c.organization_details, "ministry", ""),
+                "department": getattr(c.organization_details, "department", ""),
+                "organisation": getattr(c.organization_details, "organisation_name", ""),
+                "estimated_bid_value": float(total_value),
+                "total_quantity": total_qty,
+                "contract_period": contract_period,
+                "item_category": first_category,
             })
-    
-    return JsonResponse({
-        'success': False,
-        'message': 'Invalid request method'
-    })
+
+        # export handling
+        if request.GET.get("export") in ["excel", "csv"]:
+            return self.export_data(rows, request.GET.get("export"))
+
+        # paginate rows list (100 per page)
+        paginator = Paginator(rows, 100)
+        page = request.GET.get("page", 1)
+        try:
+            page_obj = paginator.page(page)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
+        # distinct filter options
+        org_options = list(
+            OrganisationDetail.objects.exclude(organisation_name="").values_list("organisation_name", flat=True).distinct()
+        )
+        dept_options = list(
+            OrganisationDetail.objects.exclude(department="").values_list("department", flat=True).distinct()
+        )
+        ministry_options = list(
+            OrganisationDetail.objects.exclude(ministry="").values_list("ministry", flat=True).distinct()
+        )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "rows": rows,  # full list if needed for export links
+                "page_obj": page_obj,
+                "search_query": search_query,
+                "org_filter": org_filter,
+                "dept_filter": dept_filter,
+                "ministry_filter": ministry_filter,
+                "date_from": date_from,
+                "date_to": date_to,
+                "org_options": org_options,
+                "dept_options": dept_options,
+                "ministry_options": ministry_options,
+            },
+        )
+
+    def export_data(self, rows, file_type):
+        df = pd.DataFrame(rows)
+        if "contract_obj" in df.columns:
+            df = df.drop(columns=["contract_obj"])
+        if file_type == "excel":
+            response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            response["Content-Disposition"] = 'attachment; filename="contracts.xlsx"'
+            df.to_excel(response, index=False)
+            return response
+        elif file_type == "csv":
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = 'attachment; filename="contracts.csv"'
+            df.to_csv(response, index=False)
+            return response
 
 
-def all_data_table(request):
-    """Display all extracted data in a single organized table"""
-    return render(request, 'contracts/all_data_table.html')
+
+class SaveInDb(View):
+    def post(self, request):
+        """
+        POST JSON expects:
+        {
+           "parsed_data": { ... },   # parsed JSON from your parser
+           "english_text": "..."     # optional full text
+        }
+        """
+        if request.method != 'POST':
+            return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=405)
+
+        # parse payload
+        try:
+            payload = json.loads(request.body)
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f'Invalid JSON: {str(e)}'}, status=400)
+
+        parsed_data = payload.get('parsed_data') or {}
+        # If parsed_data itself is a JSON string, attempt to load it
+        if isinstance(parsed_data, str):
+            try:
+                parsed_data = json.loads(parsed_data)
+            except Exception:
+                # keep as string/dict fallback
+                parsed_data = payload.get('parsed_data') or {}
+
+        english_text = payload.get('english_text') or ''
+        pdf_relative_path = payload.get('pdf_relative_path') or payload.get('file_relpath') or ''
+
+        # top-level pieces
+        contract_obj = parsed_data.get('contract', {}) or {}
+        file_id = parsed_data.get('source_file',{}) or {}
+        org_obj = parsed_data.get('organisation', {}) or parsed_data.get('organization', {}) or {}
+        buyer_obj = parsed_data.get('buyer', {}) or {}
+        print("BUYER IS HERE : ..",buyer_obj)
+        seller_obj = parsed_data.get('seller', {}) or {}
+        fin_obj = parsed_data.get('financial_approval', {}) or {}
+        paying_obj = parsed_data.get('paying_authority', {}) or {}
+        products_top = parsed_data.get('products', []) or []
+        consignees_top = parsed_data.get('consignees', []) or []
+        specs_top = parsed_data.get('specifications', []) or []
+        terms_top = parsed_data.get('terms', []) or []
+        epbg_top = parsed_data.get('epbg', '') or ''
+        tables = parsed_data.get('tables', []) or []
+
+        # table heuristics
+        table_extracts = extract_from_tables(tables)
+
+        # Build combined products list (normalized) - ensure string fields never None
+        combined_products = []
+        for p in products_top:
+            if isinstance(p, dict):
+                combined_products.append({
+                    'product_name': safe_str(p.get('product_name') or p.get('name') or ''),
+                    'ordered_quantity': parse_int(p.get('ordered_quantity')),
+                    'unit_price': parse_decimal(p.get('unit_price')),
+                    'total_price': parse_decimal(p.get('total_price')),
+                    'category_name_quadrant': safe_str(p.get('category_name_quadrant') or p.get('category')),
+                    'hsn_code': safe_str(p.get('hsn_code') or p.get('hsn')),
+                    'note': safe_str(p.get('note') or '')
+                })
+            else:
+                # plain string product
+                combined_products.append({
+                    'product_name': safe_str(p),
+                    'ordered_quantity': None,
+                    'unit_price': None,
+                    'total_price': None,
+                    'category_name_quadrant': '',
+                    'hsn_code': '',
+                    'note': ''
+                })
+
+        # add table-derived products (heuristic)
+        for p in table_extracts.get('products', []):
+            combined_products.append({
+                'product_name': safe_str(p.get('product_name')),
+                'ordered_quantity': p.get('ordered_quantity'),
+                'unit_price': p.get('unit_price'),
+                'total_price': p.get('total_price'),
+                'category_name_quadrant': safe_str(p.get('category_name_quadrant', '')),
+                'hsn_code': safe_str(p.get('hsn', '')),
+                'note': ''
+            })
+
+        # Build consignees list normalized
+        combined_consignees = []
+        for c in consignees_top:
+            combined_consignees.append({
+                's_no': c.get('s_no'),
+                'designation': safe_str(c.get('designation')),
+                'email': extract_email(c.get('email') or c.get('email id') or c.get('email id :')),
+                'contact': extract_phone(c.get('contact') or c.get('contact_no')),
+                'gstin': safe_str(c.get('gstin')),
+                'address': safe_str(c.get('address') or c.get('adres') or ''),
+                'lot_no': safe_str(c.get('lot_no')),
+                'quantity': parse_int(c.get('quantity')),
+                'delivery_start': parse_date(c.get('delivery_start')),
+                'delivery_end': parse_date(c.get('delivery_end')),
+                'delivery_to': safe_str(c.get('delivery_to') or '')
+            })
+        for c in table_extracts.get('consignees', []):
+            # table-derived consignees likely already dict-like
+            combined_consignees.append({
+                's_no': c.get('s_no'),
+                'designation': safe_str(c.get('designation')),
+                'email': extract_email(buyer_obj.get('email')),
+                'contact': extract_phone(c.get('contact')),
+                'gstin': safe_str(c.get('gstin')),
+                'address': safe_str(c.get('address')),
+                'lot_no': safe_str(c.get('lot_no')),
+                'quantity': c.get('quantity'),
+                'delivery_start': c.get('delivery_start'),
+                'delivery_end': c.get('delivery_end'),
+                'delivery_to': safe_str(c.get('delivery_to'))
+            })
+
+        # Specifications combined and normalized
+        combined_specs = []
+        for s in specs_top:
+            combined_specs.append({
+                'category': safe_str(s.get('category')),
+                'sub_spec': safe_str(s.get('sub_spec')),
+                'value': safe_str(s.get('value'))
+            })
+        for s in table_extracts.get('specifications', []):
+            combined_specs.append({
+                'category': safe_str(s.get('category')),
+                'sub_spec': safe_str(s.get('sub_spec')),
+                'value': safe_str(s.get('value'))
+            })
+
+        # EPBG & Terms
+        epbg_text = safe_str(epbg_top) or safe_str(table_extracts.get('epbg') or '')
+        terms_combined = [safe_str(t) for t in terms_top if t] + [safe_str(t) for t in table_extracts.get('terms', []) if t]
+
+        created = {
+            'contract': False, 'org': False, 'buyer': False, 'seller': False,
+            'financial': False, 'paying': False, 'products': 0, 'specs': 0, 'consignees': 0,
+            'epbg': False, 'terms': 0
+        }
+
+        try:
+            with transaction.atomic():
+                # Contract
+                contract_no = safe_str(contract_obj.get('contract_no') or contract_obj.get('contract_no', '') or contract_obj.get('contract_no', ''))
+                if not contract_no:
+                    return JsonResponse({'success': False, 'message': 'No contract number found in parsed data'}, status=400)
+                generated_date = parse_date(contract_obj.get('generated_date') or contract_obj.get('generated_date', ''))
+
+                contract, created_flag = Contract.objects.get_or_create(
+                    contract_no=contract_no,
+                    file_id =file_id,
+                    defaults={'generated_date': generated_date, 'raw_text': english_text}
+                )
+                created['contract'] = created_flag
+                if not created_flag:
+                    if generated_date:
+                        contract.generated_date = generated_date
+                    if english_text:
+                        contract.raw_text = english_text
+                    contract.save()
+
+                # Attach PDF file path if provided and exists
+                if pdf_relative_path:
+                    try:
+                        abs_path = os.path.join(settings.MEDIA_ROOT, pdf_relative_path)
+                        if os.path.exists(abs_path):
+                            # Assign by name so Django FileField serves it
+                            contract.pdf_file.name = pdf_relative_path.replace('\\', '/')
+                            contract.save(update_fields=['pdf_file'])
+                    except Exception:
+                        pass
+
+                # Compute and store contract embedding if model available
+                embedder = get_embedder()
+                if embedder is not None and english_text:
+                    try:
+                        combo = ' | '.join(filter(None, [
+                            contract.contract_no,
+                            contract.generated_date.isoformat() if contract.generated_date else '',
+                            english_text
+                        ]))
+                        vec = embedder.encode([combo], normalize_embeddings=True)
+                        contract.embedding = vec[0].tolist()
+                        contract.save(update_fields=['embedding'])
+                    except Exception:
+                        pass
+
+                # OrganisationDetail
+                org_defaults = {
+                    'type': safe_str(org_obj.get('type')),
+                    'ministry': safe_str(org_obj.get('ministry')),
+                    'department': safe_str(org_obj.get('department')),
+                    'organisation_name': safe_str(org_obj.get('organisation_name') or org_obj.get('organisation') or org_obj.get('organisation_name')),
+                    'office_zone': safe_str(org_obj.get('office') or org_obj.get('office_zone') or org_obj.get('ofice') or '')
+                }
+                org_detail, org_created = OrganisationDetail.objects.update_or_create(contract=contract, defaults=org_defaults)
+                created['org'] = org_created
+
+                # BuyerDetail
+                buyer_defaults = {
+                    'designation': safe_str(buyer_obj.get('designation')),
+                    'contact_no': extract_phone(buyer_obj.get('contact_no') or buyer_obj.get('contact') or buyer_obj.get('contact no')),
+                    'email': extract_email(buyer_obj.get('email') or buyer_obj.get('email id') or buyer_obj.get('email id :')),
+                    'gstin': safe_str(buyer_obj.get('gstin')),
+                    'address': safe_str(buyer_obj.get('address'))
+                }
+                buyer_detail, buyer_created = BuyerDetail.objects.update_or_create(contract=contract, defaults=buyer_defaults)
+                created['buyer'] = buyer_created
+
+                # FinancialApproval
+                financial_defaults = {
+                    'ifd_concurrence': bool(fin_obj.get('ifd_concurrence') or fin_obj.get('ifd') or False),
+                    'admin_approval_designation': safe_str(fin_obj.get('admin_approval_designation')),
+                    'financial_approval_designation': safe_str(fin_obj.get('financial_approval_designation'))
+                }
+                fin_obj_db, fin_created = FinancialApproval.objects.update_or_create(contract=contract, defaults=financial_defaults)
+                created['financial'] = fin_created
+
+                # PayingAuthority
+                paying_defaults = {
+                    'role': safe_str(paying_obj.get('role')),
+                    'payment_mode': safe_str(paying_obj.get('payment_mode')),
+                    'designation': safe_str(paying_obj.get('designation')),
+                    'email': extract_email(paying_obj.get('email')),
+                    'gstin': safe_str(paying_obj.get('gstin')),
+                    'address': safe_str(paying_obj.get('address'))
+                }
+                paying_db, paying_created = PayingAuthority.objects.update_or_create(contract=contract, defaults=paying_defaults)
+                created['paying'] = paying_created
+
+                # SellerDetail
+                seller_defaults = {
+                    'gem_seller_id': safe_str(seller_obj.get('gem_seller_id') or seller_obj.get('gem_seler_id')),
+                    'company_name': safe_str(seller_obj.get('company_name') or seller_obj.get('seller_name') or seller_obj.get('company')),
+                    'contact_no': extract_phone(seller_obj.get('contact_no') or seller_obj.get('contact')),
+                    'email': extract_email(seller_obj.get('email')),
+                    'address': safe_str(seller_obj.get('address')),
+                    'msme_registration_number': safe_str(seller_obj.get('msme_registration_number')),
+                    'gstin': safe_str(seller_obj.get('gstin')),
+                }
+                seller_db, seller_created = SellerDetail.objects.update_or_create(contract=contract, defaults=seller_defaults)
+                created['seller'] = seller_created
+
+                # Products + Specs + Consignees
+                product_map = {}
+                for p in combined_products:
+                    pname = safe_str(p.get('product_name') or 'Unknown Product')
+                    prod_defaults = {
+                        'brand': safe_str(p.get('brand') or ''),
+                        'brand_type': safe_str(p.get('brand_type') or ''),
+                        'catalogue_status': safe_str(p.get('catalogue_status') or ''),
+                        'selling_as': safe_str(p.get('selling_as') or ''),
+                        'category_name_quadrant': safe_str(p.get('category_name_quadrant') or p.get('category') or ''),
+                        'model': safe_str(p.get('model') or ''),
+                        # ensure NOT NULL charfields are empty-string instead of None
+                        'hsn_code': safe_str(p.get('hsn_code') or p.get('hsn') or ''),
+                        'ordered_quantity': p.get('ordered_quantity'),
+                        'unit': safe_str(p.get('unit') or ''),
+                        'unit_price': p.get('unit_price'),
+                        'tax_bifurcation': p.get('tax_bifurcation'),
+                        'total_price': p.get('total_price'),
+                        'note': safe_str(p.get('note') or '')
+                    }
+                    prod_obj, prod_created = Product.objects.update_or_create(contract=contract, product_name=pname, defaults=prod_defaults)
+                    product_map[pname] = prod_obj
+                    created['products'] += 1 if prod_created else 0
+
+                    for s in combined_specs:
+                        ProductSpecification.objects.update_or_create(
+                            product=prod_obj,
+                            category=s.get('category', ''),
+                            sub_spec=s.get('sub_spec', ''),
+                            defaults={'value': safe_str(s.get('value', ''))}
+                        )
+                        created['specs'] += 1
+
+                    # Compute and store product embedding if model available
+                    embedder = get_embedder()
+                    if embedder is not None:
+                        try:
+                            pcombo = ' | '.join(filter(None, [
+                                prod_obj.product_name,
+                                prod_obj.category_name_quadrant,
+                                prod_obj.hsn_code,
+                                prod_obj.note
+                            ]))
+                            if pcombo:
+                                pvec = embedder.encode([pcombo], normalize_embeddings=True)
+                                prod_obj.embedding = pvec[0].tolist()
+                                prod_obj.save(update_fields=['embedding'])
+                        except Exception:
+                            pass
+                if not product_map and parsed_data.get('products'):
+                    for p in parsed_data.get('products'):
+                        pname = safe_str(p if isinstance(p, str) else p.get('product_name', 'Unknown'))
+                        prod_obj, _ = Product.objects.get_or_create(contract=contract, product_name=pname, defaults={'hsn_code': ''})
+                        product_map[pname] = prod_obj
+
+                for c in combined_consignees:
+                    linked_product = None
+                    p_name = c.get('product_name') or ''
+                    if p_name:
+                        p_name = safe_str(p_name)
+                        linked_product = product_map.get(p_name)
+                    if not linked_product and len(product_map) == 1:
+                        linked_product = next(iter(product_map.values()))
+                    if not linked_product:
+                        linked_product, _ = Product.objects.get_or_create(contract=contract, product_name='(unspecified)', defaults={'hsn_code': ''})
+
+                    consignee_defaults = {
+                        'designation': safe_str(c.get('designation')),
+                        'email': extract_email(c.get('email') or ''),
+                        'contact': extract_phone(c.get('contact') or ''),
+                        'gstin': safe_str(c.get('gstin')),
+                        'address': safe_str(c.get('address')),
+                        'lot_no': safe_str(c.get('lot_no')),
+                        'quantity': parse_int(c.get('quantity')),
+                        'delivery_start': c.get('delivery_start') if isinstance(c.get('delivery_start'), (datetime,)) else c.get('delivery_start'),
+                        'delivery_end': c.get('delivery_end') if isinstance(c.get('delivery_end'), (datetime,)) else c.get('delivery_end'),
+                        'delivery_to': safe_str(c.get('delivery_to') or '')
+                    }
+                    ConsigneeDetail.objects.update_or_create(
+                        product=linked_product,
+                        s_no=c.get('s_no'),
+                        defaults=consignee_defaults
+                    )
+                    created['consignees'] += 1
+
+                # EPBG
+                if epbg_text:
+                    epbg_db, epbg_created = EPBGDetail.objects.update_or_create(contract=contract, defaults={'detail': safe_str(epbg_text)})
+                    created['epbg'] = epbg_created
+
+                # Terms
+                for t in terms_combined:
+                    if not t:
+                        continue
+                    TermsAndCondition.objects.get_or_create(contract=contract, clause_text=t)
+                    created['terms'] += 1
+
+        except Exception as exc:
+            return JsonResponse({'success': False, 'message': f'Error saving to database: {str(exc)}'}, status=500)
+
+        return JsonResponse({'success': True, 'message': f'Contract {contract.contract_no} saved/updated', 'created': created})
+
+
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class SemanticSearchView(View):
+    template_name = "contracts/search.html"
+
+    def get_model(self):
+        if SentenceTransformer is None:
+            return None
+        # Cache on class
+        if not hasattr(self.__class__, "_embedder"):
+            try:
+                self.__class__._embedder = SentenceTransformer('all-MiniLM-L6-v2')
+            except Exception:
+                self.__class__._embedder = None
+        return getattr(self.__class__, "_embedder", None)
+
+    def get(self, request):
+        return render(request, self.template_name, {"query": request.GET.get("q", "")})
+
+    def post(self, request):
+        try:
+            body = json.loads(request.body or '{}')
+        except Exception:
+            body = {}
+        query = body.get('query') or request.POST.get('query') or ''
+        top_k = int(body.get('top_k') or request.POST.get('top_k') or 5)
+
+        if not query:
+            return JsonResponse({"success": False, "message": "Empty query"}, status=400)
+
+        model = self.get_model()
+        if model is None or np is None:
+            # Fallback: keyword search
+            qs = (
+                Contract.objects.select_related('organization_details', 'buyer', 'seller')
+                .filter(
+                    Q(contract_no__icontains=query)
+                    | Q(raw_text__icontains=query)
+                    | Q(organization_details__organisation_name__icontains=query)
+                    | Q(organization_details__department__icontains=query)
+                    | Q(organization_details__ministry__icontains=query)
+                    | Q(seller__company_name__icontains=query)
+                    | Q(buyer__email__icontains=query)
+                )
+                .only('id', 'contract_no', 'generated_date')
+                .distinct()
+            )
+            results = [
+                {
+                    'contract_no': c.contract_no,
+                    'generated_date': c.generated_date.isoformat() if c.generated_date else '',
+                    'score': 0.0,
+                }
+                for c in qs[:top_k]
+            ]
+            summary = (
+                f"Top match: {results[0]['contract_no']} dated {results[0]['generated_date']}"
+                if results else "No relevant contracts found"
+            )
+            return JsonResponse({"success": True, "results": results, "summary": summary})
+
+        # Build corpus of searchable texts with references
+        corpus = []
+        refs = []
+        for c in Contract.objects.all().select_related('buyer', 'seller', 'organization_details'):
+            parts = [
+                c.contract_no or '',
+                (c.generated_date.isoformat() if c.generated_date else ''),
+                getattr(c.organization_details, 'organisation_name', '') if hasattr(c, 'organization_details') else '',
+                getattr(c.organization_details, 'department', '') if hasattr(c, 'organization_details') else '',
+                getattr(c.seller, 'company_name', '') if hasattr(c, 'seller') else '',
+                getattr(c.buyer, 'email', '') if hasattr(c, 'buyer') else '',
+                c.raw_text or ''
+            ]
+            corpus.append(' | '.join([p for p in parts if p]))
+            refs.append({
+                'id': c.id,
+                'contract_no': c.contract_no,
+                'generated_date': c.generated_date.isoformat() if c.generated_date else '',
+            })
+
+        # Add product names and notes as separate entries linked to their contract
+        for p in (
+            Product.objects
+            .select_related('contract')
+            .only(
+                'id', 'contract_id', 'product_name', 'note', 'hsn_code', 'category_name_quadrant',
+                'contract__contract_no', 'contract__generated_date'
+            )
+        ):
+            parts = [p.product_name or '', p.note or '', p.hsn_code or '', p.category_name_quadrant or '']
+            corpus.append(' | '.join([x for x in parts if x]))
+            refs.append({
+                'id': p.contract_id,
+                'contract_no': p.contract.contract_no if p.contract_id else '',
+                'generated_date': p.contract.generated_date.isoformat() if p.contract and p.contract.generated_date else '',
+            })
+
+        if not corpus:
+            return JsonResponse({"success": True, "results": [], "summary": "No data indexed yet"})
+
+        query_vec = model.encode([query], normalize_embeddings=True)
+        corpus_vecs = model.encode(corpus, normalize_embeddings=True)
+        # cosine similarity
+        sims = (query_vec @ corpus_vecs.T)[0]
+        top_idx = np.argsort(-sims)[:top_k]
+
+        seen_contracts = set()
+        results = []
+        for i in top_idx.tolist():
+            ref = refs[i]
+            key = ref['id']
+            if key in seen_contracts:
+                continue
+            seen_contracts.add(key)
+            results.append({
+                'contract_no': ref['contract_no'],
+                'generated_date': ref['generated_date'],
+                'score': float(sims[i])
+            })
+            if len(results) >= top_k:
+                break
+
+        # short summary
+        if results:
+            summary = f"Top match: {results[0]['contract_no']} dated {results[0]['generated_date']} (score {results[0]['score']:.3f})"
+        else:
+            summary = "No relevant contracts found"
+
+        return JsonResponse({"success": True, "results": results, "summary": summary})
+

@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Optional
+from functools import lru_cache
 from django.db import transaction
-from django.core.exceptions import ValidationError
 from datetime import datetime
 import re
 
@@ -13,6 +13,29 @@ from .models import (
 
 class ContractDataService:
     """Service for saving extracted contract data to Django models."""
+
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _get_embedder():
+        try:
+            from sentence_transformers import SentenceTransformer
+            return SentenceTransformer('all-MiniLM-L6-v2')
+        except Exception:
+            return None
+
+    @classmethod
+    def _compute_embedding(cls, text: str) -> Optional[List[float]]:
+        if not text:
+            return None
+        model = cls._get_embedder()
+        if model is None:
+            return None
+        # sentence-transformers returns numpy array; cast to list of floats
+        try:
+            vec = model.encode([text], normalize_embeddings=True)
+            return vec[0].tolist()  # type: ignore[attr-defined]
+        except Exception:
+            return None
     
     @staticmethod
     def _parse_date(date_str: str) -> Optional[datetime]:
@@ -86,7 +109,13 @@ class ContractDataService:
                     contract_no=contract_no,
                     defaults={
                         'generated_date': cls._parse_date(contract_data.get('generated_date')),
-                        'raw_text': extracted_data.get('raw_text_preview', '')
+                        'raw_text': extracted_data.get('raw_text_preview', ''),
+                        'embedding': cls._compute_embedding(
+                            ' '.join(filter(None, [
+                                contract_no,
+                                extracted_data.get('raw_text_preview', '')
+                            ]))
+                        )
                     }
                 )
                 

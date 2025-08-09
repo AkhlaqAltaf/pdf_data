@@ -16,10 +16,18 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+
+class PdfFile(models.Model):
+    pdf_file = models.FileField(verbose_name='PDF file', upload_to='pdf_files',null=True, blank=True)
+    def __str__(self):
+        return self.pdf_file.name
+
 class Contract(TimeStampedModel):
+    file = models.ForeignKey(PdfFile, on_delete=models.CASCADE,blank=True, null=True)
     contract_no = models.CharField(max_length=64, unique=True, db_index=True)
     generated_date = models.DateField(null=True, blank=True)
     raw_text = models.TextField(blank=True)
+    embedding = models.JSONField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.contract_no} — {self.generated_date or 'Contract'}"
@@ -96,13 +104,14 @@ class Product(TimeStampedModel):
     model = models.CharField(max_length=256, blank=True)
     hsn_code = models.CharField(max_length=64, blank=True)
 
-    ordered_quantity = models.IntegerField(null=True, blank=True)
+    ordered_quantity = models.CharField(max_length=64, null=True, blank=True)
     unit = models.CharField(max_length=64, blank=True)
-    unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    tax_bifurcation = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    total_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    unit_price = models.CharField(max_length=64, null=True, blank=True)
+    tax_bifurcation = models.CharField(max_length=64, null=True, blank=True)
+    total_price = models.CharField(max_length=64, null=True, blank=True)
 
     note = models.TextField(blank=True)  # e.g., seller note or undertakings
+    embedding = models.JSONField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.product_name} — {self.contract.contract_no}"

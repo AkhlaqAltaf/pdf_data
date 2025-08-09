@@ -7,3 +7,5 @@ opencv-python
 numpy
 pandas
 openpyxl
+sentence-transformers
+scikit-learn

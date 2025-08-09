@@ -1,0 +1,170 @@
+{% extends 'contracts/base.html' %}
+
+{% load static %}
+
+{% block title %}Contracts Database{% endblock %}
+
+{% block content %}
+
+        <div id="table-view" class="mt-5">
+            <h1 class="page-title">CONTRACTS DATABASE</h1>
+            
+            <form class="filter-form" method="get">
+                <input type="text" name="search" value="{{ search_query }}" class="filter-input" placeholder="Search all fields...">
+                <select name="organisation_name" class="filter-input">
+                    <option value="">Organisation</option>
+                    {% for opt in org_options %}
+                    <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <select name="department" class="filter-input">
+                    <option value="">Department</option>
+                    {% for opt in dept_options %}
+                    <option value="{{ opt }}" {% if opt == dept_filter %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <select name="ministry" class="filter-input">
+                    <option value="">Ministry</option>
+                    {% for opt in ministry_options %}
+                    <option value="{{ opt }}" {% if opt == ministry_filter %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <input type="date" name="date_from" value="{{ date_from }}" class="filter-input" placeholder="From date">
+                <input type="date" name="date_to" value="{{ date_to }}" class="filter-input" placeholder="To date">
+                <button class="filter-btn" type="submit">
+                    <i class="fas fa-filter me-1"></i>Apply Filters
+                </button>
+                <div class="export-btns">
+                    <a class="action-btn export-btn" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
+                        <i class="fas fa-file-excel me-1"></i>Export Excel
+                    </a>
+                    <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a); color: white;" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
+                        <i class="fas fa-file-csv me-1"></i>Export CSV
+                    </a>
+                </div>
+            </form>
+
+            <style>
+                .contracts-table th { white-space: nowrap; }
+                .contracts-table td { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 360px; }
+                .raw-text-modal pre { white-space: pre-wrap; max-height: 60vh; overflow: auto; }
+            </style>
+
+ <div class="table-responsive">
+                <table class="contracts-table">
+<thead>
+    <tr>
+        <th>Dated</th>
+        <th>Source File</th>
+        <th>Bid Number</th>
+        <th>Buyer Email</th>
+        <th>Beneficiary</th>
+        <th>Delivery Address</th>
+        <th>Office Name</th>
+        <th>Ministry</th>
+        <th>Department</th>
+        <th>Organisation</th>
+        <th>Estimated Bid Value</th>
+        <th>Total Quantity</th>
+        <th>Contract Period</th>
+        <th>Item Category</th>
+        <th>Raw Text</th>
+    </tr>
+</thead>
+<tbody>
+  {% for r in page_obj.object_list %}
+  <tr>
+    <td>{{ r.dated }}</td>
+
+    <td>
+      {% if r.source_file %}
+        <a href="{{ r.source_file }}" target="_blank">{{ r.source_filename }}</a>
+      {% else %}
+        N/A
+      {% endif %}
+    </td>
+
+    <td>{{ r.bid_number }}</td>
+    <td>{{ r.buyer_email }}</td>
+    <td>{{ r.beneficiary }}</td>
+    <td>{{ r.delivery_address }}</td>
+    <td>{{ r.office_name }}</td>
+    <td>{{ r.ministry }}</td>
+    <td>{{ r.department }}</td>
+    <td>{{ r.organisation }}</td>
+    <td>{{ r.estimated_bid_value }}</td>
+    <td>{{ r.total_quantity }}</td>
+    <td>{{ r.contract_period }}</td>
+    <td>{{ r.item_category }}</td>
+    <td>
+      {% if r.contract_obj.raw_text %}
+      <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#rawTextModal" data-raw="{{ r.contract_obj.raw_text|escape }}">
+        View
+      </button>
+      {% else %}N/A{% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr>
+    <td colspan="15">No contracts found.</td>
+  </tr>
+  {% endfor %}
+</tbody>
+
+
+
+    </table>
+            </div>
+
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav aria-label="Pagination">
+              <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Previous</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+                <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+              </ul>
+            </nav>
+            {% endif %}
+
+            <!-- Raw Text Modal -->
+            <div class="modal fade" id="rawTextModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Raw Text</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body raw-text-modal">
+                    <pre id="rawTextContainer"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var rawTextModal = document.getElementById('rawTextModal');
+  if (rawTextModal) {
+    rawTextModal.addEventListener('show.bs.modal', function (event) {
+      var button = event.relatedTarget;
+      var raw = button?.getAttribute('data-raw') || '';
+      // Unescape HTML entities
+      try { raw = raw.replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&amp;','&'); } catch (e) {}
+      document.getElementById('rawTextContainer').textContent = raw;
+    });
+  }
+});
+</script>
+{% endblock %}

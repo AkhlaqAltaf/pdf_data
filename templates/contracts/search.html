@@ -1,0 +1,86 @@
+{% extends 'contracts/base.html' %}
+{% block title %}AI Search{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h2 class="page-title">AI Semantic Search</h2>
+
+  <form method="post">{% csrf_token %}</form>
+  <div class="card">
+    <div class="card-header">Ask anything</div>
+    <div class="card-body">
+      <div class="input-group mb-3">
+        <input id="query" type="text" class="form-control filter-input" placeholder="e.g. contracts in March 2024 about laptops, GSTIN 1234, buyer email..." value="{{ query }}">
+        <button id="searchBtn" class="btn btn-primary filter-btn">Search</button>
+      </div>
+      <div id="summary" class="status-message" style="display:none"></div>
+      <div id="results" class="results-section"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const runSearch = () => {
+  const q = document.getElementById('query').value.trim();
+  const btn = document.getElementById('searchBtn');
+  const results = document.getElementById('results');
+  const summary = document.getElementById('summary');
+  if (!q) return;
+  btn.disabled = true;
+  results.innerHTML = '';
+  summary.style.display = 'none';
+  const getCookie = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  };
+  const csrftoken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  fetch('{% url "pdf_record:search" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken
+    },
+    body: JSON.stringify({ query: q, top_k: 5 })
+  }).then(r => r.json()).then(data => {
+    btn.disabled = false;
+    if (!data.success) {
+      summary.className = 'status-message status-error';
+      summary.style.display = 'block';
+      summary.textContent = data.message || 'Search failed';
+      return;
+    }
+    summary.className = 'status-message status-success';
+    summary.style.display = 'block';
+    summary.textContent = data.summary || '';
+    results.innerHTML = '';
+    (data.results || []).forEach(r => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-body">
+          <div><strong>Contract:</strong> ${r.contract_no}</div>
+          <div><strong>Date:</strong> ${r.generated_date || '-'}</div>
+          <div><strong>Score:</strong> ${r.score.toFixed(3)}</div>
+          <div class="mt-2">
+            <a class="btn btn-sm btn-outline-info" href="{% url 'pdf_record:view' %}?search=${encodeURIComponent(r.contract_no)}">Open in table</a>
+          </div>
+        </div>`
+      results.appendChild(card);
+    });
+  }).catch(err => {
+    btn.disabled = false;
+    summary.className = 'status-message status-error';
+    summary.style.display = 'block';
+    summary.textContent = err?.message || 'Search error';
+  });
+};
+
+document.getElementById('searchBtn').addEventListener('click', runSearch);
+document.getElementById('query').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') runSearch();
+});
+</script>
+{% endblock %}
+
+
