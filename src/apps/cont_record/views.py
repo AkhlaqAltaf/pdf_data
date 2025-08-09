@@ -270,8 +270,10 @@ def export_to_excel(request):
     """Export extracted data to Excel file"""
     if request.method == 'POST':
         try:
+            print("Export to Excel request received")
             data = json.loads(request.body)
             parsed_data = data.get('parsed_data', {})
+            print(f"Parsed data keys: {list(parsed_data.keys())}")
             
             # Create Excel writer
             output = BytesIO()
@@ -412,6 +414,7 @@ def export_to_excel(request):
             return response
             
         except Exception as e:
+            print(f"Export to Excel error: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'message': f'Error exporting to Excel: {str(e)}'
@@ -470,3 +473,64 @@ def _parse_decimal(value):
 def data_details(request):
     """Display detailed data view with navigation"""
     return render(request, 'contracts/data_details.html')
+
+
+def all_data_table(request):
+    """Display all extracted data in a single organized table"""
+    return render(request, 'contracts/all_data_table.html')
+
+
+@csrf_exempt
+def export_all_data_excel(request):
+    """Export all data to single Excel sheet"""
+    if request.method == 'POST':
+        try:
+            print("Export All Data to Excel request received")
+            data = json.loads(request.body)
+            all_data = data.get('all_data', [])
+            
+            # Create Excel writer
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                
+                # Create DataFrame from all data
+                df_data = []
+                for row in all_data:
+                    if row['field'] and row['value']:  # Skip section headers
+                        df_data.append({
+                            'Section': row['section'],
+                            'Field': row['field'],
+                            'Value': row['value']
+                        })
+                
+                df = pd.DataFrame(df_data)
+                df.to_excel(writer, sheet_name='All Contract Data', index=False)
+            
+            # Prepare response
+            output.seek(0)
+            filename = f"all_contract_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            response = HttpResponse(
+                output.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            return response
+            
+        except Exception as e:
+            print(f"Export All Data to Excel error: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'message': f'Error exporting to Excel: {str(e)}'
+            })
+    
+    return JsonResponse({
+        'success': False,
+        'message': 'Invalid request method'
+    })
+
+
+def all_data_table(request):
+    """Display all extracted data in a single organized table"""
+    return render(request, 'contracts/all_data_table.html')
