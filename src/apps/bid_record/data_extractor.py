@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 # Setup Django environment
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pdf_data.settings')
 django.setup()
 
@@ -21,7 +21,7 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 from src.apps.bid_record.models import BidDocument
 
-class FinalImprovedAutomatedBidPDFExtractor:
+class GeMBiddingPDFExtractor:
     def __init__(self, pdf_path):
         self.pdf_path = pdf_path
         self.extracted_data = {}
@@ -116,29 +116,13 @@ class FinalImprovedAutomatedBidPDFExtractor:
         
         return section_text
     
-    def extract_bid_details(self, text):
-        """Extract Bid Details from text"""
-        bid_data = {}
+    def extract_bidding_data(self, text):
+        """Extract all bidding data from PDF text"""
+        bidding_data = {}
         
-        # Extract Bid Number - look for patterns like "Bid Number: GEMC-511687790000002" or "GEM2025B6442399"
-        bid_match = re.search(r'Bid\s+Number[:\s]+([A-Z0-9\/\-]+)', text, re.IGNORECASE)
-        if bid_match:
-            bid_data['bid_number'] = bid_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            bid_match = re.search(r'GEMC-\d+', text)
-            if bid_match:
-                bid_data['bid_number'] = bid_match.group(0)
-            else:
-                # Try GEM format like GEM2025B6442399
-                bid_match = re.search(r'GEM\d{4}[A-Z]\d+', text)
-                if bid_match:
-                    bid_data['bid_number'] = bid_match.group(0)
-                else:
-                    bid_data['bid_number'] = ""
-        
-        # Extract Dated - look for patterns like "Dated : 17-Feb-2025"
-        date_match = re.search(r'Dated[:\s]+([^\n]+)', text, re.IGNORECASE)
+        # Core fields - Only extract fields that are actually found in the PDF
+        # Extract dated
+        date_match = re.search(r'dated\s*:\s*([^\n]+)', text, re.IGNORECASE)
         if date_match:
             date_str = date_match.group(1).strip()
             # Try to parse different date formats
@@ -149,224 +133,203 @@ class FinalImprovedAutomatedBidPDFExtractor:
                             # Handle "January 15, 2025" format
                             date_str = date_str.replace(',', '')
                         parsed_date = datetime.strptime(date_str, fmt).date()
-                        bid_data['dated'] = parsed_date
+                        bidding_data['dated'] = parsed_date
                         break
                     except ValueError:
                         continue
             except:
-                bid_data['dated'] = None
+                bidding_data['dated'] = None
         else:
-            bid_data['dated'] = None
-        
-        return bid_data
-    
-    def extract_organization_details(self, text):
-        """Extract Organization Details from text"""
-        org_data = {}
-        
-        # Extract the organization section
-        org_section = self.extract_section_text(text, "Organisation Details", "Bid Details")
-        if not org_section:
-            org_section = self.extract_section_text(text, "Organisation", "Bid")
-        
-        # Extract fields with improved patterns
-        org_data['ministry'] = self.extract_field_value(org_section, r'Ministry[^\n]*\n?([A-Za-z &]+)')
-        org_data['department'] = self.extract_field_value(org_section, r'Department\s+Name\s*([A-Za-z &]+)')
-        org_data['organisation'] = self.extract_field_value(org_section, r'Organisation\s+Name\s*([A-Za-z &\(\)]+)')
-        org_data['office_name'] = self.extract_field_value(org_section, r'Office\s+Name\s*([A-Za-z0-9* &]+)')
-        
-        return org_data
-    
-    def extract_bid_info(self, text):
-        """Extract Bid Information from text"""
-        bid_info = {}
-        
-        # Extract bid end date/time
-        bid_end_match = re.search(r'Bid\s+End\s+Date/Time\s+([0-9]{2}-[0-9]{2}-[0-9]{4} [0-9:]+)', text, re.IGNORECASE)
-        if bid_end_match:
-            bid_info['bid_end_datetime'] = bid_end_match.group(1).strip()
-        else:
-            bid_info['bid_end_datetime'] = ""
-        
-        # Extract bid opening date/time
-        bid_open_match = re.search(r'Bid\s+Opening\s+Date/Time\s+([0-9]{2}-[0-9]{2}-[0-9]{2,4} [0-9:]+)', text, re.IGNORECASE)
-        if bid_open_match:
-            bid_info['bid_open_datetime'] = bid_open_match.group(1).strip()
-        else:
-            bid_info['bid_open_datetime'] = ""
-        
-        # Extract bid offer validity
-        validity_match = re.search(r'Bid\s+Offer\s+Validity\s+.*?(\d+)\s*\(?Days?\)?', text, re.IGNORECASE)
-        if validity_match:
-            bid_info['bid_offer_validity_days'] = int(validity_match.group(1))
-        else:
-            bid_info['bid_offer_validity_days'] = None
-        
-        # Extract estimated bid value
-        value_match = re.search(r'Estimated\s+Bid\s+Value\s*[:\s]*([^\n]+)', text, re.IGNORECASE)
-        if value_match:
-            value_str = value_match.group(1).strip()
-            # Try to extract numeric value
-            numeric_match = re.search(r'[\d,]+\.?\d*', value_str)
-            if numeric_match:
+            # Try alternative date patterns
+            date_match = re.search(r'\d{1,2}-[A-Za-z]{3}-\d{4}', text)
+            if date_match:
                 try:
-                    value = float(numeric_match.group(0).replace(',', ''))
-                    bid_info['estimated_bid_value'] = value
+                    parsed_date = datetime.strptime(date_match.group(0), '%d-%b-%Y').date()
+                    bidding_data['dated'] = parsed_date
                 except:
-                    bid_info['estimated_bid_value'] = None
+                    bidding_data['dated'] = None
             else:
-                bid_info['estimated_bid_value'] = None
-        else:
-            bid_info['estimated_bid_value'] = None
+                bidding_data['dated'] = None
         
-        # Extract total quantity
-        quantity_match = re.search(r'Total\s+Quantity\s+(\d+)', text, re.IGNORECASE)
-        if quantity_match:
-            bid_info['total_quantity'] = int(quantity_match.group(1))
-        else:
-            bid_info['total_quantity'] = None
-        
-        # Extract contract period
-        period_match = re.search(r'Contract\s+Period\s*([^\n]+)', text, re.IGNORECASE)
-        if period_match:
-            bid_info['contract_period'] = period_match.group(1).strip()
-        else:
-            bid_info['contract_period'] = ""
-        
-        # Extract delivery days
-        delivery_match = re.search(r'Delivery\s+Days\s+(\d+)', text, re.IGNORECASE)
-        if delivery_match:
-            bid_info['delivery_days'] = int(delivery_match.group(1))
-        else:
-            bid_info['delivery_days'] = None
-        
-        return bid_info
-    
-    def extract_product_details(self, text):
-        """Extract Product Details from text"""
-        product_data = {}
-        
-        # Extract item category
-        category_match = re.search(r'Item\s+Category\s*([\s\S]{1,500})GeMARPTS', text, re.IGNORECASE)
-        if category_match:
-            product_data['item_category'] = " ".join(category_match.group(1).split())
+        # Extract bid number
+        bid_match = re.search(r'bid\s*number\s*:\s*([^\n]+)', text, re.IGNORECASE)
+        if bid_match:
+            bidding_data['bid_number'] = bid_match.group(1).strip()
         else:
             # Try alternative patterns
-            category_match = re.search(r'Primary\s+product\s+category\s*(.+)', text, re.IGNORECASE)
-            if category_match:
-                product_data['item_category'] = category_match.group(1).strip()
+            bid_match = re.search(r'bid\s*no\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            if bid_match:
+                bidding_data['bid_number'] = bid_match.group(1).strip()
             else:
-                product_data['item_category'] = ""
-        
-        # Extract scope of supply
-        scope_match = re.search(r'Scope\s+of\s+supply\s*[:\s]*([^\n]+)', text, re.IGNORECASE)
-        if scope_match:
-            product_data['scope_of_supply'] = scope_match.group(1).strip()
-        else:
-            product_data['scope_of_supply'] = ""
-        
-        # Extract option clause
-        option_match = re.search(r'OPTION\s+CLAUSE:\s*([\s\S]{1,500}?)\n\d+\.', text, re.IGNORECASE)
-        if option_match:
-            product_data['option_clause'] = " ".join(option_match.group(1).split())
-        else:
-            product_data['option_clause'] = ""
-        
-        return product_data
-    
-    def extract_evaluation_details(self, text):
-        """Extract Evaluation Details from text"""
-        eval_data = {}
-        
-        # Extract evaluation method
-        method_match = re.search(r'Evaluation\s+Method\s*([^\n]+)', text, re.IGNORECASE)
-        if method_match:
-            eval_data['evaluation_method'] = method_match.group(1).strip()
-        else:
-            eval_data['evaluation_method'] = ""
-        
-        # Extract inspection required
-        inspection_match = re.search(r'Inspection\s+Required.*?(Yes|No)', text, re.IGNORECASE)
-        if inspection_match:
-            eval_data['inspection_required'] = inspection_match.group(1)
-        else:
-            eval_data['inspection_required'] = ""
-        
-        # Extract MII purchase preference
-        mii_match = re.search(r'MII\s+Purchase\s+Preference\s*(Yes|No)', text, re.IGNORECASE)
-        if mii_match:
-            eval_data['mii_purchase_preference'] = mii_match.group(1)
-        else:
-            eval_data['mii_purchase_preference'] = ""
-        
-        # Extract MSE purchase preference
-        mse_match = re.search(r'MSE\s+Purchase\s+Preference\s*(Yes|No)', text, re.IGNORECASE)
-        if mse_match:
-            eval_data['mse_purchase_preference'] = mse_match.group(1)
-        else:
-            eval_data['mse_purchase_preference'] = ""
-        
-        # Extract technical clarification time
-        tech_match = re.search(r'Time\s+allowed\s+for\s+Technical\s+Clarifications\s*.*?(\d+)\s+Days?', text, re.IGNORECASE)
-        if tech_match:
-            eval_data['technical_clarification_time'] = f"{tech_match.group(1)} Days"
-        else:
-            eval_data['technical_clarification_time'] = ""
-        
-        # Extract similar category
-        similar_match = re.search(r'Similar\s+Category\s*[:\s]*([^\n]+)', text, re.IGNORECASE)
-        if similar_match:
-            eval_data['similar_category'] = similar_match.group(1).strip()
-        else:
-            eval_data['similar_category'] = ""
-        
-        # Extract MSE exemption
-        mse_exemption_match = re.search(r'MSE\s+Exemption\s*[:\s]*(Yes|No)', text, re.IGNORECASE)
-        if mse_exemption_match:
-            eval_data['mse_exemption'] = mse_exemption_match.group(1)
-        else:
-            eval_data['mse_exemption'] = ""
-        
-        # Extract startup exemption
-        startup_exemption_match = re.search(r'Startup\s+Exemption\s*[:\s]*(Yes|No)', text, re.IGNORECASE)
-        if startup_exemption_match:
-            eval_data['startup_exemption'] = startup_exemption_match.group(1)
-        else:
-            eval_data['startup_exemption'] = ""
-        
-        return eval_data
-    
-    def extract_contact_details(self, text):
-        """Extract Contact Details from text"""
-        contact_data = {}
-        
-        # Extract buyer email
-        email_match = re.search(r'Buyer\s+Email\s*[:\s]*([^\s\n]+@[^\s\n]+)', text, re.IGNORECASE)
-        if email_match:
-            contact_data['buyer_email'] = email_match.group(1).strip()
-        else:
-            contact_data['buyer_email'] = ""
+                # Try GEM format like GEM2025B6442399
+                bidding_match = re.search(r'GEM\d{4}[A-Z]\d+', text)
+                if bidding_match:
+                    bidding_data['bid_number'] = bidding_match.group(0)
+                else:
+                    bidding_match = re.search(r'GEM\w*-\d+', text)
+                    if bidding_match:
+                        bidding_data['bid_number'] = bidding_match.group(0)
+                    else:
+                        bidding_data['bid_number'] = ""
         
         # Extract beneficiary
-        beneficiary_match = re.search(r'Beneficiary\s*[:\s]*([^\n]+)', text, re.IGNORECASE)
+        beneficiary_match = re.search(r'beneficiary\s*:\s*([^\n]+)', text, re.IGNORECASE)
         if beneficiary_match:
-            contact_data['beneficiary'] = beneficiary_match.group(1).strip()
+            bidding_data['beneficiary'] = beneficiary_match.group(1).strip()
         else:
-            contact_data['beneficiary'] = ""
+            bidding_data['beneficiary'] = ""
         
-        # Extract delivery address
-        address_match = re.search(r'Address\s+([A-Za-z0-9, &]+)', text, re.IGNORECASE)
-        if address_match:
-            contact_data['delivery_address'] = address_match.group(1).strip()
+        # Extract ministry
+        ministry_match = re.search(r'Ministry/State Name\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if ministry_match:
+            bidding_data['ministry'] = ministry_match.group(1).strip()
         else:
             # Try alternative patterns
-            address_match = re.search(r'Delivery\s+Address\s*[:\s]*([^\n]+)', text, re.IGNORECASE)
-            if address_match:
-                contact_data['delivery_address'] = address_match.group(1).strip()
+            ministry_match = re.search(r'ministry\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            if ministry_match:
+                bidding_data['ministry'] = ministry_match.group(1).strip()
             else:
-                contact_data['delivery_address'] = ""
+                bidding_data['ministry'] = ""
         
-        return contact_data
+        # Extract department
+        dept_match = re.search(r'Department Name\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if dept_match:
+            bidding_data['department'] = dept_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            dept_match = re.search(r'department\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            if dept_match:
+                bidding_data['department'] = dept_match.group(1).strip()
+            else:
+                bidding_data['department'] = ""
+        
+        # Extract organisation
+        org_match = re.search(r'Organisation Name\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if org_match:
+            bidding_data['organisation'] = org_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            org_match = re.search(r'organisation\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            if org_match:
+                bidding_data['organisation'] = org_match.group(1).strip()
+            else:
+                bidding_data['organisation'] = ""
+        
+        # Extract contract period
+        period_match = re.search(r'Contract Period\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if period_match:
+            bidding_data['contract_period'] = period_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            period_match = re.search(r'contract\s*period\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            if period_match:
+                bidding_data['contract_period'] = period_match.group(1).strip()
+            else:
+                bidding_data['contract_period'] = ""
+        
+        # Extract item category - capture multiple lines but stop at next section
+        category_match = re.search(r'Item Category\s*\n([^\n]+(?:\n[^\n]+)*?)(?=\n\w+[^\n]*:|$)', text, re.IGNORECASE | re.DOTALL)
+        if category_match:
+            # Clean up the captured text to remove Hindi and extra content
+            category_text = category_match.group(1).strip()
+            # Remove Hindi text and clean up
+            category_text = re.sub(r'[^\x00-\x7F]+', '', category_text)  # Remove non-ASCII
+            category_text = re.sub(r'\s+', ' ', category_text).strip()  # Normalize whitespace
+            bidding_data['item_category'] = category_text
+        else:
+            # Try alternative patterns
+            category_match = re.search(r'item\s*category\s*:\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\w+[^\n]*:|$)', text, re.IGNORECASE | re.DOTALL)
+            if category_match:
+                category_text = category_match.group(1).strip()
+                category_text = re.sub(r'[^\x00-\x7F]+', '', category_text)
+                category_text = re.sub(r'\s+', ' ', category_text).strip()
+                bidding_data['item_category'] = category_text
+            else:
+                bidding_data['item_category'] = ""
+        
+        # BID DETAILS SECTION - Only extract fields that are actually found
+        # Extract bid end datetime
+        end_match = re.search(r'Bid End Date/Time\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if end_match:
+            bidding_data['bid_end_datetime'] = end_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            end_match = re.search(r'bid\s*end\s*date\s*/\s*time\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+            if end_match:
+                bidding_data['bid_end_datetime'] = end_match.group(1).strip()
+            else:
+                bidding_data['bid_end_datetime'] = ""
+        
+        # Extract bid open datetime
+        open_match = re.search(r'Bid Opening\nDate/Time\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if open_match:
+            bidding_data['bid_open_datetime'] = open_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            open_match = re.search(r'bid\s*opening\s*date\s*/\s*time\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+            if open_match:
+                bidding_data['bid_open_datetime'] = open_match.group(1).strip()
+            else:
+                bidding_data['bid_open_datetime'] = ""
+        
+        # Extract bid offer validity days
+        validity_match = re.search(r'Bid Offer\nValidity \(From End Date\)\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if validity_match:
+            validity_str = validity_match.group(1).strip()
+            # Try to extract numeric value
+            numeric_match = re.search(r'(\d+)', validity_str)
+            if numeric_match:
+                try:
+                    bidding_data['bid_offer_validity_days'] = int(numeric_match.group(1))
+                except:
+                    bidding_data['bid_offer_validity_days'] = None
+            else:
+                bidding_data['bid_offer_validity_days'] = None
+        else:
+            # Try alternative patterns
+            validity_match = re.search(r'bid\s*offer\s*validity\s*\(from\s*end\s*date\)\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+            if validity_match:
+                validity_str = validity_match.group(1).strip()
+                numeric_match = re.search(r'(\d+)', validity_str)
+                if numeric_match:
+                    try:
+                        bidding_data['bid_offer_validity_days'] = int(numeric_match.group(1))
+                    except:
+                        bidding_data['bid_offer_validity_days'] = None
+                else:
+                    bidding_data['bid_offer_validity_days'] = None
+            else:
+                bidding_data['bid_offer_validity_days'] = None
+        
+        # Extract similar category
+        similar_match = re.search(r'Similar Category\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if similar_match:
+            bidding_data['similar_category'] = similar_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            similar_match = re.search(r'similar\s*category\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            if similar_match:
+                bidding_data['similar_category'] = similar_match.group(1).strip()
+            else:
+                bidding_data['similar_category'] = ""
+        
+        # Extract MSE exemption
+        mse_exemption_match = re.search(r'MSE Exemption for Years of\nExperience and Turnover\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+        if mse_exemption_match:
+            bidding_data['mse_exemption'] = mse_exemption_match.group(1).strip()
+        else:
+            # Try alternative patterns
+            mse_exemption_match = re.search(r'mse\s*exemption\s*for\s*years\s*of\s*experience\s*and\s*turnover\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
+            if mse_exemption_match:
+                bidding_data['mse_exemption'] = mse_exemption_match.group(1).strip()
+            else:
+                bidding_data['mse_exemption'] = ""
+        
+        # Add source file and raw text
+        bidding_data['source_file'] = os.path.basename(self.pdf_path)
+        bidding_data['raw_text'] = text
+        
+        return bidding_data
     
     def check_bid_exists(self, bid_number):
         """Check if bid already exists in database"""
@@ -380,10 +343,7 @@ class FinalImprovedAutomatedBidPDFExtractor:
             from sentence_transformers import SentenceTransformer
             
             # Get the embedder model
-            model = self._get_embedder()
-            if model is None:
-                print("⚠️  Warning: Could not load sentence-transformers model, skipping embedding generation")
-                return None
+            model = SentenceTransformer('all-MiniLM-L6-v2')
             
             # Generate embedding for the cleaned text
             embedding = model.encode([text], normalize_embeddings=True)
@@ -398,21 +358,11 @@ class FinalImprovedAutomatedBidPDFExtractor:
             print(f"⚠️  Warning: Error generating embedding: {e}")
             return None
     
-    def _get_embedder(self):
-        """Get the sentence transformer model for embeddings"""
-        try:
-            from sentence_transformers import SentenceTransformer
-            return SentenceTransformer('all-MiniLM-L6-v2')
-        except Exception as e:
-            print(f"⚠️  Warning: Could not import sentence-transformers: {e}")
-            return None
-    
     def save_to_django_models(self, text):
         """Save extracted data to Django models"""
         try:
             # Check if bid already exists
-            bid_data = self.extracted_data['Bid Details']
-            bid_number = bid_data.get('bid_number', '')
+            bid_number = self.extracted_data.get('bid_number', '')
             
             if self.check_bid_exists(bid_number):
                 print(f"⏭️  Bid {bid_number} already exists, skipping...")
@@ -425,31 +375,32 @@ class FinalImprovedAutomatedBidPDFExtractor:
             print("🔍 Generating embedding for bid text...")
             embedding = self.generate_embedding(cleaned_text)
             
-            # Create BidDocument instance with updated fields
-            self.bid_instance = BidDocument.objects.create(
-                dated=bid_data.get('dated'),
-                source_file=os.path.basename(self.pdf_path),
-                bid_number=bid_number,
-                buyer_email=self.extracted_data['Contact Details'].get('buyer_email', ''),
-                beneficiary=self.extracted_data['Contact Details'].get('beneficiary', ''),
-                delivery_address=self.extracted_data['Contact Details'].get('delivery_address', ''),
-                office_name=self.extracted_data['Organization Details'].get('office_name', ''),
-                ministry=self.extracted_data['Organization Details'].get('ministry', ''),
-                department=self.extracted_data['Organization Details'].get('department', ''),
-                organisation=self.extracted_data['Organization Details'].get('organisation', ''),
-                estimated_bid_value=self.extracted_data['Bid Info'].get('estimated_bid_value'),
-                total_quantity=self.extracted_data['Bid Info'].get('total_quantity'),
-                contract_period=self.extracted_data['Bid Info'].get('contract_period', ''),
-                item_category=self.extracted_data['Product Details'].get('item_category', ''),
-                bid_end_datetime=self.extracted_data['Bid Info'].get('bid_end_datetime', ''),
-                bid_open_datetime=self.extracted_data['Bid Info'].get('bid_open_datetime', ''),
-                bid_offer_validity_days=self.extracted_data['Bid Info'].get('bid_offer_validity_days'),
-                similar_category=self.extracted_data['Evaluation Details'].get('similar_category', ''),
-                mse_exemption=self.extracted_data['Evaluation Details'].get('mse_exemption', ''),
-                startup_exemption=self.extracted_data['Evaluation Details'].get('startup_exemption', ''),
-                raw_text=cleaned_text,
-                embedding=embedding
-            )
+            # Save the PDF file
+            pdf_filename = os.path.basename(self.pdf_path)
+            with open(self.pdf_path, 'rb') as pdf_file:
+                from django.core.files import File
+                pdf_file_obj = File(pdf_file, name=pdf_filename)
+                
+                # Create BidDocument instance with updated fields including file
+                self.bid_instance = BidDocument.objects.create(
+                    file=pdf_file_obj,
+                    dated=self.extracted_data.get('dated'),
+                    source_file=self.extracted_data.get('source_file', ''),
+                    bid_number=bid_number,
+                    beneficiary=self.extracted_data.get('beneficiary', ''),
+                    ministry=self.extracted_data.get('ministry', ''),
+                    department=self.extracted_data.get('department', ''),
+                    organisation=self.extracted_data.get('organisation', ''),
+                    contract_period=self.extracted_data.get('contract_period', ''),
+                    item_category=self.extracted_data.get('item_category', ''),
+                    bid_end_datetime=self.extracted_data.get('bid_end_datetime', ''),
+                    bid_open_datetime=self.extracted_data.get('bid_open_datetime', ''),
+                    bid_offer_validity_days=self.extracted_data.get('bid_offer_validity_days'),
+                    similar_category=self.extracted_data.get('similar_category', ''),
+                    mse_exemption=self.extracted_data.get('mse_exemption', ''),
+                    raw_text=cleaned_text,
+                    embedding=embedding
+                )
             
             print(f"✅ Successfully saved data to Django models for bid: {bid_number}")
             return True
@@ -469,40 +420,48 @@ class FinalImprovedAutomatedBidPDFExtractor:
         
         print("🔍 Parsing extracted data...")
         
-        # Extract all sections
-        self.extracted_data = {
-            'Bid Details': self.extract_bid_details(text),
-            'Organization Details': self.extract_organization_details(text),
-            'Bid Info': self.extract_bid_info(text),
-            'Product Details': self.extract_product_details(text),
-            'Evaluation Details': self.extract_evaluation_details(text),
-            'Contact Details': self.extract_contact_details(text)
-        }
+        # Extract bidding data
+        self.extracted_data = self.extract_bidding_data(text)
         
         return self.extracted_data
     
     def export_to_excel(self, output_path=None):
         """Export extracted data to Excel"""
         if output_path is None:
-            # Auto-generate filename using bid ID
-            bid_number = self.extracted_data.get('Bid Details', {}).get('bid_number', 'unknown')
+            # Auto-generate filename using bid number
+            bid_number = self.extracted_data.get('bid_number', 'unknown')
             if bid_number and bid_number != 'unknown':
-                output_path = f"extracted_data/{bid_number}.xlsx"
+                # Replace forward slashes with underscores to make valid filename
+                safe_filename = bid_number.replace('/', '_').replace('\\', '_')
+                output_path = f"extracted_data/{safe_filename}.xlsx"
             else:
-                output_path = "extracted_data/final_improved_bid_data.xlsx"
+                output_path = "extracted_data/gem_bidding_data.xlsx"
         
         # Ensure extracted_data directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         try:
+            # Clean data for Excel export - remove Hindi text and problematic characters
+            clean_data = {}
+            for field, value in self.extracted_data.items():
+                if field == 'raw_text':
+                    # Skip raw text in Excel export
+                    continue
+                if isinstance(value, str):
+                    # Clean the value for Excel
+                    clean_value = re.sub(r'[^\x00-\x7F]+', '', value)  # Remove non-ASCII
+                    clean_value = re.sub(r'[^\w\s,.-]', '', clean_value)  # Remove special chars
+                    clean_value = re.sub(r'\s+', ' ', clean_value).strip()  # Normalize whitespace
+                    clean_data[field] = clean_value
+                else:
+                    clean_data[field] = value
+            
             # Create a writer object
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                # Write each section to a separate sheet
-                for section_name, section_data in self.extracted_data.items():
-                    # Convert to DataFrame
-                    df = pd.DataFrame(list(section_data.items()), columns=['Field', 'Value'])
-                    # Write to Excel
-                    df.to_excel(writer, sheet_name=section_name[:31], index=False)  # Excel sheet names limited to 31 chars
+                # Convert to DataFrame
+                df = pd.DataFrame(list(clean_data.items()), columns=['Field', 'Value'])
+                # Write to Excel
+                df.to_excel(writer, sheet_name='Bidding Data', index=False)
                     
             print(f"📊 Data exported to Excel: {output_path}")
             return True
@@ -513,12 +472,14 @@ class FinalImprovedAutomatedBidPDFExtractor:
     def export_to_json(self, output_path=None):
         """Export extracted data to JSON"""
         if output_path is None:
-            # Auto-generate filename using bid ID
-            bid_number = self.extracted_data.get('Bid Details', {}).get('bid_number', 'unknown')
+            # Auto-generate filename using bid number
+            bid_number = self.extracted_data.get('bid_number', 'unknown')
             if bid_number and bid_number != 'unknown':
-                output_path = f"extracted_data/{bid_number}.json"
+                # Replace forward slashes with underscores to make valid filename
+                safe_filename = bid_number.replace('/', '_').replace('\\', '_')
+                output_path = f"extracted_data/{safe_filename}.json"
             else:
-                output_path = "extracted_data/final_improved_bid_data.json"
+                output_path = "extracted_data/gem_bidding_data.json"
         
         # Ensure extracted_data directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -536,14 +497,17 @@ class FinalImprovedAutomatedBidPDFExtractor:
     def print_extracted_data(self):
         """Print extracted data in a formatted way"""
         print("\n" + "="*80)
-        print("FINAL IMPROVED AUTOMATED EXTRACTED BID DATA FROM PDF")
+        print("GEM BIDDING EXTRACTED DATA FROM PDF")
         print("="*80)
         
-        for section_name, section_data in self.extracted_data.items():
-            print(f"\n{section_name}:")
-            print("-" * len(section_name))
-            for field, value in section_data.items():
+        # Only show fields that have actual values (not empty)
+        for field, value in self.extracted_data.items():
+            if field != 'raw_text' and value:  # Skip raw text and empty fields
                 print(f"{field}: {value}")
+        
+        print("\n" + "="*80)
+        print(f"Total fields extracted: {len([k for k, v in self.extracted_data.items() if k != 'raw_text' and v])}")
+        print("="*80)
 
 def find_all_pdfs_recursively(data_dir):
     """Find all PDF files recursively in data directory and subdirectories"""
@@ -561,7 +525,7 @@ def process_single_pdf(pdf_path, thread_id):
     try:
         print(f"🔄 [Thread-{thread_id}] Processing: {os.path.basename(pdf_path)}")
         
-        extractor = FinalImprovedAutomatedBidPDFExtractor(pdf_path)
+        extractor = GeMBiddingPDFExtractor(pdf_path)
         
         # Extract data
         data = extractor.extract_all_data()
@@ -589,8 +553,8 @@ def process_single_pdf(pdf_path, thread_id):
 
 def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
     """Process all PDFs in data directory using multi-threading"""
-    data_dir = Path(__file__).parent.parent.parent / "data"
-    extracted_data_dir = Path(__file__).parent.parent.parent / "extracted_data"
+    data_dir = Path(__file__).parent / "data"
+    extracted_data_dir = Path(__file__).parent / "extracted_data"
     
     # Ensure directories exist
     data_dir.mkdir(exist_ok=True)
@@ -630,8 +594,8 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
                     successful_extractions += 1
                 else:
                     # Check if it was skipped due to duplicate
-                    extractor = FinalImprovedAutomatedBidPDFExtractor(pdf_path)
-                    bid_data = extractor.extract_bid_details(extractor.extract_text_from_pdf())
+                    extractor = GeMBiddingPDFExtractor(pdf_path)
+                    bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
                     bid_number = bid_data.get('bid_number', '')
                     if extractor.check_bid_exists(bid_number):
                         skipped_extractions += 1
@@ -658,8 +622,8 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
 
 def process_all_pdfs_in_data_directory():
     """Process all PDFs in data directory (single-threaded for backward compatibility)"""
-    data_dir = Path(__file__).parent.parent.parent / "data"
-    extracted_data_dir = Path(__file__).parent.parent.parent / "extracted_data"
+    data_dir = Path(__file__).parent / "data"
+    extracted_data_dir = Path(__file__).parent / "extracted_data"
     
     # Ensure directories exist
     data_dir.mkdir(exist_ok=True)
@@ -684,7 +648,7 @@ def process_all_pdfs_in_data_directory():
         print("-" * 50)
         
         try:
-            extractor = FinalImprovedAutomatedBidPDFExtractor(pdf_file)
+            extractor = GeMBiddingPDFExtractor(pdf_file)
             
             # Extract data
             data = extractor.extract_all_data()
@@ -741,7 +705,7 @@ def generate_embeddings_for_existing_bids():
             return
         
         # Create extractor instance for embedding generation
-        extractor = FinalImprovedAutomatedBidPDFExtractor("dummy.pdf")
+        extractor = GeMBiddingPDFExtractor("dummy.pdf")
         
         # Generate embeddings for bids
         bid_count = 0
@@ -771,10 +735,10 @@ def generate_embeddings_for_existing_bids():
 
 def show_help():
     """Display help information for the script"""
-    print("🧪 BID DATA EXTRACTOR - COMMAND LINE USAGE")
+    print("🧪 GEM BIDDING DATA EXTRACTOR - COMMAND LINE USAGE")
     print("="*60)
     print("Usage:")
-    print("  python text_extractor.py [options] [pdf_file]")
+    print("  python data_extractor.py [options] [pdf_file]")
     print("")
     print("Options:")
     print("  --help, -h              Show this help message")
@@ -783,11 +747,11 @@ def show_help():
     print("  --workers=N, -w=N       Set number of worker threads (default: 4)")
     print("")
     print("Examples:")
-    print("  python text_extractor.py                    # Process all PDFs in data/ directory")
-    print("  python text_extractor.py document.pdf       # Process single PDF file")
-    print("  python text_extractor.py --multi-thread     # Multi-threaded processing")
-    print("  python text_extractor.py --multi-thread --workers=8  # 8 worker threads")
-    print("  python text_extractor.py --generate-embeddings      # Generate embeddings")
+    print("  python data_extractor.py                    # Process all PDFs in data/ directory")
+    print("  python data_extractor.py document.pdf       # Process single PDF file")
+    print("  python data_extractor.py --multi-thread     # Multi-threaded processing")
+    print("  python data_extractor.py --multi-thread --workers=8  # 8 worker threads")
+    print("  python data_extractor.py --generate-embeddings      # Generate embeddings")
     print("")
     print("Note: Place PDF files in the 'data/' directory for batch processing")
     print("="*60)
@@ -825,7 +789,7 @@ def main():
             return
         
         # Process single PDF
-        extractor = FinalImprovedAutomatedBidPDFExtractor(pdf_path)
+        extractor = GeMBiddingPDFExtractor(pdf_path)
         
         # Extract data
         data = extractor.extract_all_data()

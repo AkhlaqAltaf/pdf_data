@@ -2,7 +2,7 @@
 
 {% load static %}
 
-{% block title %}Contracts Database{% endblock %}
+{% block title %}Bidding Database{% endblock %}
 
 {% block content %}
 <style>
@@ -30,8 +30,8 @@
         padding: 0.5rem 0.8rem;
         font-size: 0.85rem;
     }
-    .contracts-table th, 
-    .contracts-table td {
+    .bids-table th, 
+    .bids-table td {
         padding: 0.6rem 0.8rem;
         font-size: 0.85rem;
         max-width: 200px;
@@ -56,19 +56,18 @@
     }
 
     /* Color Scheme from Base */
-    .contracts-table th {
+    .bids-table th {
         background: rgba(0, 0, 0, 0.3);
         color: var(--accent-neon);
         border-bottom: 2px solid var(--accent-blue);
     }
-    .contracts-table td {
-                background: rgba(0, 212, 255, 0.05);
-
+    .bids-table td {
+        background: rgba(0, 212, 255, 0.05);
         color: var(--text-secondary);
         border-bottom: 1px solid rgba(0, 212, 255, 0.1);
     }
-    .contracts-table tr:hover td {
-        background: rgba(0, 212, 255, 0.05);
+    .bids-table tr:hover td {
+        background: rgba(0, 212, 255, 0.08);
         color: var(--text-primary);
     }
     .filter-input {
@@ -89,25 +88,25 @@
     }
     
     /* User-Friendly Table Improvements */
-    .contracts-table {
+    .bids-table {
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     
-    .contracts-table th {
+    .bids-table th {
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         border-bottom: 2px solid var(--accent-blue);
     }
     
-    .contracts-table td {
+    .bids-table td {
         vertical-align: middle;
         transition: all 0.2s ease;
     }
     
-    .contracts-table tr:hover td {
+    .bids-table tr:hover td {
         background: rgba(0, 212, 255, 0.08);
         transform: translateY(-1px);
         box-shadow: 0 2px 4px rgba(0, 212, 255, 0.1);
@@ -133,23 +132,23 @@
     }
     
     /* Improved text truncation */
-    .contracts-table td[title] {
+    .bids-table td[title] {
         cursor: help;
     }
     
     /* Better spacing for action buttons */
-    .contracts-table td:last-child {
+    .bids-table td:last-child {
         text-align: center;
         min-width: 100px;
     }
 </style>
 
 <div id="table-view">
-    <h1 class="page-title">CONTRACTS DATABASE</h1>
+    <h1 class="page-title">BIDDING DATABASE</h1>
     
     <form class="filter-form d-flex flex-wrap align-items-center" method="get">
         <input type="text" name="search" value="{{ search_query }}" class="filter-input me-2 mb-2" placeholder="Search...">
-        <select name="organisation_name" class="filter-input me-2 mb-2">
+        <select name="organisation" class="filter-input me-2 mb-2">
             <option value="">Organisation</option>
             {% for opt in org_options %}
             <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
@@ -175,93 +174,91 @@
         </button>
         
         <div class="export-btns d-flex ms-auto mb-2">
-            <!-- <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
+            <!-- <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
                 <i class="fas fa-file-excel me-1"></i>Excel
             </a> -->
-            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
+            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
                 <i class="fas fa-file-csv me-1"></i>CSV
             </a>
         </div>
     </form>
 
     <div class="table-responsive">
-        <table class="contracts-table table table-bordered table-striped">
+        <table class="bids-table table table-bordered table-striped">
             <thead>
                 <tr class="section-header">
                     <th colspan="6">Basic Info</th>
                     <th colspan="4">Organisation</th>
-                    <th colspan="4">Buyer</th>
+                    <th colspan="4">Bid Details</th>
                     <th colspan="1">Actions</th>
                 </tr>
                 <tr>
                     <!-- Basic Info -->
-                    <th>Contract No</th>
+                    <th>Bid Number</th>
                     <th>Date</th>
+                    <th>Beneficiary</th>
                     <th>Source</th>
-                    <th>Value</th>
-                    <th>Qty</th>
                     <th>Type</th>
+                    <th>MSE Exemption</th>
                     
                     <!-- Organisation -->
                     <th>Ministry</th>
                     <th>Department</th>
                     <th>Organisation</th>
-                    <th>Zone</th>
+                    <th>Contract Period</th>
                     
-                    <!-- Buyer -->
-                    <th>Designation</th>
-                    <th>Contact</th>
-                    <th>Email</th>
-                    <th>GSTIN</th>
+                    <!-- Bid Details -->
+                    <th>Item Category</th>
+                    <th>Bid End Date</th>
+                    <th>Bid Open Date</th>
+                    <th>Validity Days</th>
                     
                     <!-- Actions -->
                     <th>Details</th>
                 </tr>
             </thead>
             <tbody>
-                {% for contract in page_obj %}
+                {% for bid in page_obj %}
                 <tr>
                     <!-- Basic Info -->
-                    <td>{{ contract.contract_no }}</td>
-                    <td>{{ contract.generated_date|date:"Y-m-d" }}</td>
+                    <td>{{ bid.bid_number }}</td>
+                    <td>{{ bid.dated|date:"Y-m-d" }}</td>
+                    <td>{{ bid.beneficiary|default:"N/A" }}</td>
                     <td>
-                        {% if contract.source_file %}
-                        <a href="{{ contract.source_file }}" target="_blank" title="{{ contract.source_filename }}">
-                            {{ contract.source_filename|truncatechars:15 }}
+                        {% if bid.source_file %}
+                        <a href="{{ bid.source_file }}" target="_blank" title="{{ bid.source_file }}">
+                            {{ bid.source_file|truncatechars:15 }}
                         </a>
                         {% else %}N/A{% endif %}
                     </td>
-                    <td>{{ contract.total_value }}</td>
-                    <td>{{ contract.total_quantity }}</td>
-                    <td>{{ contract.org_type }}</td>
+                    <td>{{ bid.mse_exemption|default:"N/A" }}</td>
+                    <td>{{ bid.mse_exemption|default:"N/A" }}</td>
                     
                     <!-- Organisation -->
-                    <td>{{ contract.ministry }}</td>
-                    <td>{{ contract.department }}</td>
-                    <td>{{ contract.organisation }}</td>
-                    <td>{{ contract.office_zone|default:"-" }}</td>
+                    <td title="{{ bid.ministry }}">{{ bid.ministry|default:"-" }}</td>
+                    <td title="{{ bid.department }}">{{ bid.department|default:"-" }}</td>
+                    <td title="{{ bid.organisation }}">{{ bid.organisation|default:"-" }}</td>
+                    <td>{{ bid.contract_period|default:"-" }}</td>
                     
-                    <!-- Buyer -->
-                    <td title="{{ contract.buyer_designation }}">{{ contract.buyer_designation|truncatechars:20 }}</td>
-                    <td>{{ contract.buyer_contact|default:"-" }}</td>
-                    <td title="{{ contract.buyer_email }}">{{ contract.buyer_email|truncatechars:25 }}</td>
-                    <td>{{ contract.buyer_gstin|default:"-" }}</td>
+                    <!-- Bid Details -->
+                    <td style="background: rgba(0, 0, 0, 0.1) !important;" title="{{ bid.item_category }}">
+                        {% if bid.item_category %}
+                            {{ bid.item_category|truncatechars:25 }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>{{ bid.bid_end_datetime|default:"-" }}</td>
+                    <td>{{ bid.bid_open_datetime|default:"-" }}</td>
+                    <td>{{ bid.bid_offer_validity_days|default:"-" }} days</td>
                     
                     <!-- Actions -->
                     <td>
-                        <button type="button" class="btn btn-sm btn-primary me-2" 
+                        <button type="button" class="btn btn-sm btn-primary" 
                                 data-bs-toggle="modal" 
                                 data-bs-target="#rawTextModal"
-                                data-raw="{{ contract.raw_text|escape }}">
+                                data-raw="{{ bid.raw_text|escape }}">
                             <i class="fas fa-eye me-1"></i>View
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary" 
-                                type="button" 
-                                data-bs-toggle="collapse" 
-                                data-bs-target="#details-{{ forloop.counter }}"
-                                aria-expanded="false" 
-                                aria-controls="details-{{ forloop.counter }}">
-                            <i class="fas fa-chevron-down me-1"></i>Show Details
                         </button>
                     </td>
                 </tr>
@@ -271,42 +268,78 @@
                     <td colspan="15" class="p-0 border-top-0">
                         <div class="collapse" id="details-{{ forloop.counter }}">
                             <div class="p-2">
-                                <!-- Products Section -->
+                                <!-- Bid Information Section -->
                                 <div class="mb-3">
                                     <h6 class="d-inline-block section-header collapse-toggle mb-1" 
                                         data-bs-toggle="collapse" 
-                                        data-bs-target="#products-{{ forloop.counter }}">
-                                        Products ({{ contract.products|length }})
+                                        data-bs-target="#bid-info-{{ forloop.counter }}">
+                                        Bid Information
                                     </h6>
-                                    <div class="collapse show" id="products-{{ forloop.counter }}">
+                                    <div class="collapse show" id="bid-info-{{ forloop.counter }}">
                                         <div class="row row-cols-1 row-cols-md-2 g-2">
-                                            {% for product in contract.products %}
                                             <div class="col">
                                                 <div class="bg-dark p-2 rounded">
-                                                    <div><strong>Name:</strong> {{ product.name }}</div>
-                                                    <div><strong>Brand:</strong> {{ product.brand }}</div>
-                                                    <div><strong>Qty:</strong> {{ product.quantity }} {{ product.unit }}</div>
-                                                    <div><strong>Price:</strong> {{ product.unit_price }} (Total: {{ product.total_price }})</div>
+                                                    <div><strong>Bid Number:</strong> {{ bid.bid_number }}</div>
+                                                    <div><strong>Date:</strong> {{ bid.dated|date:"Y-m-d" }}</div>
+                                                    <div><strong>Beneficiary:</strong> {{ bid.beneficiary|default:"N/A" }}</div>
+                                                    <div><strong>Source File:</strong> {{ bid.source_file|default:"N/A" }}</div>
                                                 </div>
                                             </div>
-                                            {% endfor %}
+                                            <div class="col">
+                                                <div class="bg-dark p-2 rounded">
+                                                    <div><strong>MSE Exemption:</strong> {{ bid.mse_exemption|default:"N/A" }}</div>
+                                                    <div><strong>Similar Category:</strong> {{ bid.similar_category|default:"N/A" }}</div>
+                                                    <div><strong>Bid End Date:</strong> {{ bid.bid_end_datetime|default:"N/A" }}</div>
+                                                    <div><strong>Bid Open Date:</strong> {{ bid.bid_open_datetime|default:"N/A" }}</div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Other sections with similar compact styling -->
+                                <!-- Organisation Details Section -->
+                                <div class="mb-3">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#org-details-{{ forloop.counter }}">
+                                        Organisation Details
+                                    </h6>
+                                    <div class="collapse" id="org-details-{{ forloop.counter }}">
+                                        <div class="bg-dark p-2 rounded">
+                                            <div><strong>Ministry:</strong> {{ bid.ministry|default:"N/A" }}</div>
+                                            <div><strong>Department:</strong> {{ bid.department|default:"N/A" }}</div>
+                                            <div><strong>Organisation:</strong> {{ bid.organisation|default:"N/A" }}</div>
+                                            <div><strong>Contract Period:</strong> {{ bid.contract_period|default:"N/A" }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Item Details Section -->
+                                <div class="mb-3">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#item-details-{{ forloop.counter }}">
+                                        Item Details
+                                    </h6>
+                                    <div class="collapse" id="item-details-{{ forloop.counter }}">
+                                        <div class="bg-dark p-2 rounded">
+                                            <div><strong>Item Category:</strong> {{ bid.item_category|default:"N/A" }}</div>
+                                            <div><strong>Bid Offer Validity:</strong> {{ bid.bid_offer_validity_days|default:"N/A" }} days</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Raw Text Section -->
                                 <div class="mb-2">
                                     <h6 class="d-inline-block section-header collapse-toggle mb-1" 
                                         data-bs-toggle="collapse" 
-                                        data-bs-target="#specs-{{ forloop.counter }}">
-                                        Specs ({{ contract.specifications|length }})
+                                        data-bs-target="#raw-text-{{ forloop.counter }}">
+                                        Raw Text Preview
                                     </h6>
-                                    <div class="collapse" id="specs-{{ forloop.counter }}">
-                                        <ul class="mb-0">
-                                            {% for spec in contract.specifications|slice:":5" %}
-                                            <li>{{ spec|truncatechars:100 }}</li>
-                                            {% endfor %}
-                                        </ul>
+                                    <div class="collapse" id="raw-text-{{ forloop.counter }}">
+                                        <div class="bg-dark p-2 rounded">
+                                            <pre class="text-light mb-0" style="max-height: 200px; overflow-y: auto;">{{ bid.raw_text|default:"No raw text available" }}</pre>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -325,9 +358,10 @@
                         </div>
                     </td>
                 </tr>
+               
                 {% empty %}
                 <tr>
-                    <td colspan="15">No contracts found</td>
+                    <td colspan="15">No bids found</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -339,13 +373,13 @@
     <nav aria-label="Pagination">
         <ul class="pagination justify-content-center">
             {% if page_obj.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Prev</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Prev</a></li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">Prev</span></li>
             {% endif %}
             <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
             {% if page_obj.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">Next</span></li>
             {% endif %}
