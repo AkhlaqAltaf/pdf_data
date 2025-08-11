@@ -301,7 +301,7 @@ class ContractTableView(View):
                 "consignees": consignees,
 
                 # EPBG
-                "epbg_detail": contract.epbg.detail if contract.epbg else "",
+                # "epbg_detail": contract.epbg.detail if contract.epbg else "",
 
                 # Terms
                 "terms": terms,

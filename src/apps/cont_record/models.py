@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import RegexValidator
 from django.utils import timezone
+from typing import Optional, List
 
 
 PHONE_REGEX = RegexValidator(
@@ -34,6 +35,30 @@ class Contract(TimeStampedModel):
 
     class Meta:
         ordering = ['-generated_date', '-created_at']
+        
+    @classmethod
+    def _get_embedder(cls):
+        try:
+            from sentence_transformers import SentenceTransformer
+            return SentenceTransformer('all-MiniLM-L6-v2')
+        except Exception:
+            return None
+
+    @staticmethod
+    def _compute_embedding(text: str) -> Optional[List[float]]:
+        if not text:
+            return None
+        model = Contract._get_embedder()
+        if model is None:
+            return None
+        # sentence-transformers returns numpy array; cast to list of floats
+        try:
+            vec = model.encode([text], normalize_embeddings=True)
+            return vec[0].tolist()  # type: ignore[attr-defined]
+        except Exception:
+            return None
+        
+        
 
 
 class OrganisationDetail(models.Model):
@@ -95,6 +120,7 @@ class SellerDetail(models.Model):
 
 class Product(TimeStampedModel):
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='products')
+    item_description = models.TextField(blank=True, verbose_name='Item Description')
     product_name = models.CharField(max_length=512)
     brand = models.CharField(max_length=256, blank=True)
     brand_type = models.CharField(max_length=128, blank=True)
@@ -136,6 +162,7 @@ class ConsigneeDetail(models.Model):
     contact = models.CharField(max_length=30, validators=[PHONE_REGEX], blank=True)
     gstin = models.CharField(max_length=32, blank=True)
     address = models.TextField(blank=True)
+    item = models.CharField(max_length=256, blank=True, verbose_name='Item')
     lot_no = models.CharField(max_length=128, blank=True)
     quantity = models.IntegerField(null=True, blank=True)
     delivery_start = models.DateField(null=True, blank=True)
