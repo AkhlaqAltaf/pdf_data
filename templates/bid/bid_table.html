@@ -62,7 +62,7 @@
         border-bottom: 2px solid var(--accent-blue);
     }
     .bids-table td {
-        background: rgba(0, 212, 255, 0.05);
+        background: rgba(0, 212, 255, 0.05) !important;
         color: var(--text-secondary);
         border-bottom: 1px solid rgba(0, 212, 255, 0.1);
     }
@@ -87,19 +87,41 @@
         border: none;
     }
     
-    /* Full Width Table */
-    #table-view {
-        padding: 0;
-        width: 100%;
-    }
+    /* Table Width and Overflow Fixes */
     .table-responsive {
         width: 100%;
         margin: 0;
         padding: 0;
+        overflow-x: auto;
+        max-width: 100%;
     }
     .bids-table {
         width: 100%;
         margin: 0;
+        table-layout: fixed;
+        min-width: 1000px;
+    }
+    .bids-table th,
+    .bids-table td {
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Custom scrollbar styling */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+    .table-responsive::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+    }
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--accent-blue);
+        border-radius: 4px;
+    }
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-neon);
     }
 </style>
 
@@ -163,7 +185,6 @@
                     <th>Date</th>
                     <th>Beneficiary</th>
                     <th>Source</th>
-                    <th>Actions</th>
                     
                     <!-- Organisation -->
                     <th>Ministry</th>
@@ -175,6 +196,7 @@
                     <th>Item Category</th>
                     <th>Bid End Date/Time</th>
                     <th>Validity Days</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -197,11 +219,7 @@
                             </a>
                         {% else %}N/A{% endif %}
                     </td>
-                    <td>
-                        <button class="btn btn-sm btn-primary action-btn" onclick="viewBidDetails('{{ bid.bid_number }}', '{{ bid.id }}')">
-                            <i class="fas fa-eye me-1"></i>View
-                        </button>
-                    </td>
+                  
                     
                     <!-- Organisation -->
                     <td>{{ bid.ministry|default:"N/A" }}</td>
@@ -224,6 +242,11 @@
                         {% else %}
                             N/A
                         {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-primary action-btn" onclick="viewBidDetails('{{ bid.bid_number }}', '{{ bid.id }}')">
+                            <i class="fas fa-eye me-1"></i>View
+                        </button>
                     </td>
                 </tr>
                 
@@ -305,7 +328,7 @@
                     </td>
                 </tr>
                 
-                <!-- Show Details Button Row -->
+                <!-- Show Details Button Row
                 <tr>
                     <td colspan="12" class="text-center p-2 border-top-0">
                         <button class="btn btn-sm btn-outline-primary" 
@@ -315,7 +338,7 @@
                             <i class="fas fa-chevron-down"></i> Show Details
                         </button>
                     </td>
-                </tr>
+                </tr> -->
                 {% empty %}
                 <tr>
                     <td colspan="12" class="text-center">

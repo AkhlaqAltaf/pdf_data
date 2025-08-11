@@ -144,7 +144,6 @@
                     <th>Source</th>
                     <th>Value</th>
                     <th>Qty</th>
-                    <th>Text</th>
                     
                     <!-- Organisation -->
                     <th>Type</th>
@@ -159,6 +158,8 @@
                     <th>Email</th>
                     <th>GSTIN</th>
                     <th>Address</th>
+                    <th>Text</th>
+
                 </tr>
             </thead>
             <tbody>
@@ -176,16 +177,7 @@
                     </td>
                     <td>{{ contract.total_value }}</td>
                     <td>{{ contract.total_quantity }}</td>
-                    <td>
-                        {% if contract.raw_text %}
-                        <button type="button" class="btn btn-sm btn-primary" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#rawTextModal"
-                                data-raw="{{ contract.raw_text|escape }}">
-                            View
-                        </button>
-                        {% else %}N/A{% endif %}
-                    </td>
+                  
                     
                     <!-- Organisation -->
                     <td>{{ contract.org_type }}</td>
@@ -200,6 +192,16 @@
                     <td>{{ contract.buyer_email }}</td>
                     <td>{{ contract.buyer_gstin }}</td>
                     <td title="{{ contract.buyer_address }}">{{ contract.buyer_address|truncatechars:15 }}</td>
+                    <td>
+                        {% if contract.raw_text %}
+                        <button type="button" class="btn btn-sm btn-primary" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#rawTextModal"
+                                data-raw="{{ contract.raw_text|escape }}">
+                            View
+                        </button>
+                        {% else %}N/A{% endif %}
+                    </td>
                 </tr>
                 
                 <!-- Expandable row for details -->
