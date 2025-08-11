@@ -1,0 +1,64 @@
+{
+  "Organization Details": {
+    "Type": "Central Government",
+    "Ministry": "Ministry of Defence",
+    "Department": "Department of Military Affairs",
+    "Organization Name": "Indian Army",
+    "Office Zone": ""
+  },
+  "Contract Details": {
+    "Contract No": "GEMC-511687790007029",
+    "Generated Date": "04-Feb-2025"
+  },
+  "Buyer Details": {
+    "Designation": "BUYER-CONSIGNEE",
+    "Contact No": "0175-7066530-855",
+    "Email ID": "buyer1386.ia.pb@gembuyer.in",
+    "GSTIN": "-",
+    "Address": "Military Hospital Old Cantt Opposite Rajendra Medical College Patiala, PATIALA, PUNJAB-147001, India"
+  },
+  "Financial Approval Detail": {
+    "IFD Concurrence": "No",
+    "Designation of Administrative Approval": "CFA",
+    "Designation of Financial Approval": "CFA"
+  },
+  "Paying Authority Details": {
+    "Role": "BUYER",
+    "Payment Mode": "CGDA-CDA",
+    "Designation": "BUYER-CONSIGNEE",
+    "Email ID": "buyer1386.ia.pb@gembuyer.in",
+    "GSTIN": "-",
+    "Address": "Military Hospital Old Cantt Opposite Rajendra Medical"
+  },
+  "Seller Details": {
+    "GeM Seller ID": "YOQG230008143052",
+    "Company Name": "VIN ARX PHARMACEUTICALS PRIVATE LIMITED",
+    "Contact No": "07837697372",
+    "Email ID": "info@vinarxpharma.com",
+    "MSME Registration number": "UDYAM-HR-13-0016036",
+    "GSTIN": "06AAICV5736F1Z6 (R)",
+    "Address": "PLOT NO 274,INDUSTRIAL AREA,PHASE-1,SECTOR - 7 PANCHKULA"
+  },
+  "Product Details": {
+    "Item Description": "",
+    "Product Name": "METHYLPREDNISOLONE 4MG TAB",
+    "Brand": "VIN ARX PHARMACEUTICALS PVT. LTD.",
+    "Brand Type": "NA",
+    "Catalogue Status": "NA",
+    "Selling As": "NA",
+    "Category Name & Quadrant": "NA (-)",
+    "Model": "एचएसएन कोड HSN Code: 30049099",
+    "HSN Code": "30049099",
+    "Ordered Quantity": "",
+    "Unit": "",
+    "Unit Price (INR)": "71"
+  },
+  "Consignee Detail": {
+    "Designation": "-",
+    "Email ID": "buyer1386.ia.pb@gembuyer.in",
+    "Contact": "0175-7066530-855",
+    "GSTIN": "-",
+    "Item": "",
+    "Address": "Military Hospital Old Cantt Opposite Rajendra Medical"
+  }
+}
