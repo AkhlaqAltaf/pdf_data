@@ -1,8 +1,8 @@
-{% extends "contracts/base.html" %}
+{% extends 'contracts/base.html' %}
 
 {% load static %}
 
-{% block title %}Bid Data Database{% endblock %}
+{% block title %}Bidding Database{% endblock %}
 
 {% block content %}
 <style>
@@ -62,12 +62,12 @@
         border-bottom: 2px solid var(--accent-blue);
     }
     .bids-table td {
-        background: rgba(0, 212, 255, 0.05) !important;
+        background: rgba(0, 212, 255, 0.05);
         color: var(--text-secondary);
         border-bottom: 1px solid rgba(0, 212, 255, 0.1);
     }
     .bids-table tr:hover td {
-        background: rgba(0, 212, 255, 0.05);
+        background: rgba(0, 212, 255, 0.08);
         color: var(--text-primary);
     }
     .filter-input {
@@ -87,41 +87,59 @@
         border: none;
     }
     
-    /* Table Width and Overflow Fixes */
-    .table-responsive {
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        overflow-x: auto;
-        max-width: 100%;
-    }
+    /* User-Friendly Table Improvements */
     .bids-table {
-        width: 100%;
-        margin: 0;
-        table-layout: fixed;
-        min-width: 1000px;
-    }
-    .bids-table th,
-    .bids-table td {
-        max-width: 150px;
-        white-space: nowrap;
+        border-radius: 8px;
         overflow: hidden;
-        text-overflow: ellipsis;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     
-    /* Custom scrollbar styling */
-    .table-responsive::-webkit-scrollbar {
-        height: 8px;
+    .bids-table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid var(--accent-blue);
     }
-    .table-responsive::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.3);
+    
+    .bids-table td {
+        vertical-align: middle;
+        transition: all 0.2s ease;
     }
-    .table-responsive::-webkit-scrollbar-thumb {
-        background: var(--accent-blue);
-        border-radius: 4px;
+    
+    .bids-table tr:hover td {
+        background: rgba(0, 212, 255, 0.08);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 212, 255, 0.1);
     }
-    .table-responsive::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-neon);
+    
+    .section-header th {
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3));
+        font-weight: 700;
+        text-align: center;
+        padding: 1rem 0.5rem;
+    }
+    
+    /* Better button styling */
+    .btn-sm {
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-sm:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Improved text truncation */
+    .bids-table td[title] {
+        cursor: help;
+    }
+    
+    /* Better spacing for action buttons */
+    .bids-table td:last-child {
+        text-align: center;
+        min-width: 100px;
     }
 </style>
 
@@ -132,20 +150,20 @@
         <input type="text" name="search" value="{{ search_query }}" class="filter-input me-2 mb-2" placeholder="Search...">
         <select name="organisation" class="filter-input me-2 mb-2">
             <option value="">Organisation</option>
-            {% for org in org_options %}
-                <option value="{{ org }}" {% if org == org_filter %}selected{% endif %}>{{ org }}</option>
+            {% for opt in org_options %}
+            <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
             {% endfor %}
         </select>
         <select name="department" class="filter-input me-2 mb-2">
             <option value="">Department</option>
-            {% for dept in dept_options %}
-                <option value="{{ dept }}" {% if dept == dept_filter %}selected{% endif %}>{{ dept }}</option>
+            {% for opt in dept_options %}
+            <option value="{{ opt }}" {% if opt == dept_filter %}selected{% endif %}>{{ opt }}</option>
             {% endfor %}
         </select>
         <select name="ministry" class="filter-input me-2 mb-2">
             <option value="">Ministry</option>
-            {% for ministry in ministry_options %}
-                <option value="{{ ministry }}" {% if ministry == ministry_filter %}selected{% endif %}>{{ ministry }}</option>
+            {% for opt in ministry_options %}
+            <option value="{{ opt }}" {% if opt == ministry_filter %}selected{% endif %}>{{ opt }}</option>
             {% endfor %}
         </select>
         <input type="date" name="date_from" value="{{ date_from }}" class="filter-input me-2 mb-2" placeholder="From">
@@ -156,28 +174,23 @@
         </button>
         
         <div class="export-btns d-flex ms-auto mb-2">
-            <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if ministry_filter %}ministry={{ ministry_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
+            <!-- <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
                 <i class="fas fa-file-excel me-1"></i>Excel
-            </a>
-            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if ministry_filter %}ministry={{ ministry_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
+            </a> -->
+            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
                 <i class="fas fa-file-csv me-1"></i>CSV
             </a>
         </div>
     </form>
 
-    <!-- Results Summary -->
-    <div class="results-summary mb-3">
-        <p class="text-light">📊 Showing {{ page_obj.start_index }} - {{ page_obj.end_index }} of {{ page_obj.paginator.count }} bids</p>
-    </div>
-
-    <!-- Data Table -->
     <div class="table-responsive">
         <table class="bids-table table table-bordered table-striped">
             <thead>
                 <tr class="section-header">
-                    <th colspan="5">Basic Info</th>
+                    <th colspan="6">Basic Info</th>
                     <th colspan="4">Organisation</th>
-                    <th colspan="3">Bid Details</th>
+                    <th colspan="4">Bid Details</th>
+                    <th colspan="1">Actions</th>
                 </tr>
                 <tr>
                     <!-- Basic Info -->
@@ -185,6 +198,8 @@
                     <th>Date</th>
                     <th>Beneficiary</th>
                     <th>Source</th>
+                    <th>Type</th>
+                    <th>MSE Exemption</th>
                     
                     <!-- Organisation -->
                     <th>Ministry</th>
@@ -194,57 +209,55 @@
                     
                     <!-- Bid Details -->
                     <th>Item Category</th>
-                    <th>Bid End Date/Time</th>
+                    <th>Bid End Date</th>
+                    <th>Bid Open Date</th>
                     <th>Validity Days</th>
-                    <th>Actions</th>
+                    
+                    <!-- Actions -->
+                    <th>Details</th>
                 </tr>
             </thead>
             <tbody>
                 {% for bid in page_obj %}
                 <tr>
                     <!-- Basic Info -->
-                    <td><strong>{{ bid.bid_number|default:"N/A" }}</strong></td>
-                    <td>
-                        {% if bid.dated %}
-                            {{ bid.dated|date:"Y-m-d" }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
+                    <td>{{ bid.bid_number }}</td>
+                    <td>{{ bid.dated|date:"Y-m-d" }}</td>
                     <td>{{ bid.beneficiary|default:"N/A" }}</td>
                     <td>
                         {% if bid.source_file %}
-                            <a href="{{ bid.source_file }}" target="_blank" title="{{ bid.source_file }}">
-                                {{ bid.source_file|truncatechars:15 }}
-                            </a>
+                        <a href="{{ bid.source_file }}" target="_blank" title="{{ bid.source_file }}">
+                            {{ bid.source_file|truncatechars:15 }}
+                        </a>
                         {% else %}N/A{% endif %}
                     </td>
-                  
+                    <td>{{ bid.mse_exemption|default:"N/A" }}</td>
+                    <td>{{ bid.mse_exemption|default:"N/A" }}</td>
                     
                     <!-- Organisation -->
-                    <td>{{ bid.ministry|default:"N/A" }}</td>
-                    <td>{{ bid.department|default:"N/A" }}</td>
-                    <td>{{ bid.organisation|default:"N/A" }}</td>
-                    <td>{{ bid.contract_period|default:"N/A" }}</td>
+                    <td title="{{ bid.ministry }}">{{ bid.ministry|default:"-" }}</td>
+                    <td title="{{ bid.department }}">{{ bid.department|default:"-" }}</td>
+                    <td title="{{ bid.organisation }}">{{ bid.organisation|default:"-" }}</td>
+                    <td>{{ bid.contract_period|default:"-" }}</td>
                     
                     <!-- Bid Details -->
-                    <td title="{{ bid.item_category }}">
+                    <td style="background: rgba(0, 0, 0, 0.1) !important;" title="{{ bid.item_category }}">
                         {% if bid.item_category %}
-                            {{ bid.item_category|truncatechars:30 }}
+                            {{ bid.item_category|truncatechars:25 }}
                         {% else %}
                             N/A
                         {% endif %}
                     </td>
-                    <td>{{ bid.bid_end_datetime|default:"N/A" }}</td>
+                    <td>{{ bid.bid_end_datetime|default:"-" }}</td>
+                    <td>{{ bid.bid_open_datetime|default:"-" }}</td>
+                    <td>{{ bid.bid_offer_validity_days|default:"-" }} days</td>
+                    
+                    <!-- Actions -->
                     <td>
-                        {% if bid.bid_offer_validity_days %}
-                            {{ bid.bid_offer_validity_days }} days
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-primary action-btn" onclick="viewBidDetails('{{ bid.bid_number }}', '{{ bid.id }}')">
+                        <button type="button" class="btn btn-sm btn-primary" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#rawTextModal"
+                                data-raw="{{ bid.raw_text|escape }}">
                             <i class="fas fa-eye me-1"></i>View
                         </button>
                     </td>
@@ -252,7 +265,7 @@
                 
                 <!-- Expandable row for details -->
                 <tr>
-                    <td colspan="12" class="p-0 border-top-0">
+                    <td colspan="15" class="p-0 border-top-0">
                         <div class="collapse" id="details-{{ forloop.counter }}">
                             <div class="p-2">
                                 <!-- Bid Information Section -->
@@ -266,40 +279,57 @@
                                         <div class="row row-cols-1 row-cols-md-2 g-2">
                                             <div class="col">
                                                 <div class="bg-dark p-2 rounded">
-                                                    <div><strong>Bid Open Date/Time:</strong> {{ bid.bid_open_datetime|default:"N/A" }}</div>
-                                                    <div><strong>Similar Category:</strong> {{ bid.similar_category|default:"N/A" }}</div>
-                                                    <div><strong>MSE Exemption:</strong> 
-                                                        {% if bid.mse_exemption %}
-                                                            <span class="badge {% if bid.mse_exemption == 'Yes' %}bg-success{% else %}bg-secondary{% endif %}">
-                                                                {{ bid.mse_exemption }}
-                                                            </span>
-                                                        {% else %}
-                                                            N/A
-                                                        {% endif %}
-                                                    </div>
+                                                    <div><strong>Bid Number:</strong> {{ bid.bid_number }}</div>
+                                                    <div><strong>Date:</strong> {{ bid.dated|date:"Y-m-d" }}</div>
+                                                    <div><strong>Beneficiary:</strong> {{ bid.beneficiary|default:"N/A" }}</div>
+                                                    <div><strong>Source File:</strong> {{ bid.source_file|default:"N/A" }}</div>
                                                 </div>
                                             </div>
                                             <div class="col">
                                                 <div class="bg-dark p-2 rounded">
-                                                    <div><strong>Created At:</strong> {{ bid.created_at|date:"Y-m-d H:i" }}</div>
-                                                    <div><strong>Source File:</strong> {{ bid.source_file|default:"N/A" }}</div>
-                                                    <div><strong>PDF File:</strong> 
-                                                        {% if bid.file %}
-                                                            <a href="{{ bid.file.url }}" target="_blank" class="btn btn-sm btn-secondary">
-                                                                <i class="fas fa-file-pdf me-1"></i>View PDF
-                                                            </a>
-                                                        {% else %}
-                                                            N/A
-                                                        {% endif %}
-                                                    </div>
+                                                    <div><strong>MSE Exemption:</strong> {{ bid.mse_exemption|default:"N/A" }}</div>
+                                                    <div><strong>Similar Category:</strong> {{ bid.similar_category|default:"N/A" }}</div>
+                                                    <div><strong>Bid End Date:</strong> {{ bid.bid_end_datetime|default:"N/A" }}</div>
+                                                    <div><strong>Bid Open Date:</strong> {{ bid.bid_open_datetime|default:"N/A" }}</div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 
+                                <!-- Organisation Details Section -->
+                                <div class="mb-3">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#org-details-{{ forloop.counter }}">
+                                        Organisation Details
+                                    </h6>
+                                    <div class="collapse" id="org-details-{{ forloop.counter }}">
+                                        <div class="bg-dark p-2 rounded">
+                                            <div><strong>Ministry:</strong> {{ bid.ministry|default:"N/A" }}</div>
+                                            <div><strong>Department:</strong> {{ bid.department|default:"N/A" }}</div>
+                                            <div><strong>Organisation:</strong> {{ bid.organisation|default:"N/A" }}</div>
+                                            <div><strong>Contract Period:</strong> {{ bid.contract_period|default:"N/A" }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Item Details Section -->
+                                <div class="mb-3">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#item-details-{{ forloop.counter }}">
+                                        Item Details
+                                    </h6>
+                                    <div class="collapse" id="item-details-{{ forloop.counter }}">
+                                        <div class="bg-dark p-2 rounded">
+                                            <div><strong>Item Category:</strong> {{ bid.item_category|default:"N/A" }}</div>
+                                            <div><strong>Bid Offer Validity:</strong> {{ bid.bid_offer_validity_days|default:"N/A" }} days</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <!-- Raw Text Section -->
-                                {% if bid.raw_text %}
                                 <div class="mb-2">
                                     <h6 class="d-inline-block section-header collapse-toggle mb-1" 
                                         data-bs-toggle="collapse" 
@@ -307,47 +337,31 @@
                                         Raw Text Preview
                                     </h6>
                                     <div class="collapse" id="raw-text-{{ forloop.counter }}">
-                                        <div class="bg-secondary p-3 rounded" style="max-height: 200px; overflow-y: auto;">
-                                            <pre class="text-light mb-0" style="white-space: pre-wrap; font-size: 0.9rem;">{{ bid.raw_text|truncatechars:1000 }}</pre>
+                                        <div class="bg-dark p-2 rounded">
+                                            <pre class="text-light mb-0" style="max-height: 200px; overflow-y: auto;">{{ bid.raw_text|default:"No raw text available" }}</pre>
                                         </div>
                                     </div>
                                 </div>
-                                {% endif %}
                                 
                                 <!-- Toggle button in the same row -->
                                 <div class="text-center mt-2">
-                                    <button class="btn btn-sm btn-outline-secondary" 
+                                    <button class="btn btn-sm btn-outline-primary" 
                                             type="button" 
                                             data-bs-toggle="collapse" 
-                                            data-bs-target="#details-{{ forloop.counter }}">
-                                        <i class="fas fa-chevron-up"></i> Hide Details
+                                            data-bs-target="#details-{{ forloop.counter }}"
+                                            aria-expanded="false" 
+                                            aria-controls="details-{{ forloop.counter }}">
+                                        Hide Details
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </td>
                 </tr>
-                
-                <!-- Show Details Button Row
-                <tr>
-                    <td colspan="12" class="text-center p-2 border-top-0">
-                        <button class="btn btn-sm btn-outline-primary" 
-                                type="button" 
-                                data-bs-toggle="collapse" 
-                                data-bs-target="#details-{{ forloop.counter }}">
-                            <i class="fas fa-chevron-down"></i> Show Details
-                        </button>
-                    </td>
-                </tr> -->
+               
                 {% empty %}
                 <tr>
-                    <td colspan="12" class="text-center">
-                        <div class="no-data">
-                            <h4>📭 No Bids Found</h4>
-                            <p>No bid data matches your current filters.</p>
-                            <a href="{% url 'bid_record:view_bids' %}" class="btn btn-primary">🔄 Clear Filters</a>
-                        </div>
-                    </td>
+                    <td colspan="15">No bids found</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -355,106 +369,35 @@
     </div>
 
     <!-- Pagination -->
-    {% if page_obj.has_other_pages %}
-    <div class="pagination-section">
-        <nav aria-label="Bid pagination">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if org_filter %}&organisation={{ org_filter }}{% endif %}{% if dept_filter %}&department={{ dept_filter }}{% endif %}{% if ministry_filter %}&ministry={{ ministry_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">« First</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if org_filter %}&organisation={{ org_filter }}{% endif %}{% if dept_filter %}&department={{ dept_filter }}{% endif %}{% if ministry_filter %}&ministry={{ ministry_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">‹ Previous</a>
-                    </li>
-                {% endif %}
-
-                {% for num in page_obj.paginator.page_range %}
-                    {% if page_obj.number == num %}
-                        <li class="page-item active">
-                            <span class="page-link">{{ num }}</span>
-                        </li>
-                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if org_filter %}&organisation={{ org_filter }}{% endif %}{% if dept_filter %}&department={{ dept_filter }}{% endif %}{% if ministry_filter %}&ministry={{ ministry_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">{{ num }}</a>
-                        </li>
-                    {% endif %}
-                {% endfor %}
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if org_filter %}&organisation={{ org_filter }}{% endif %}{% if dept_filter %}&department={{ dept_filter }}{% endif %}{% if ministry_filter %}&ministry={{ ministry_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">Next ›</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if org_filter %}&organisation={{ org_filter }}{% endif %}{% if dept_filter %}&department={{ dept_filter }}{% endif %}{% if ministry_filter %}&ministry={{ ministry_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">Last »</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
-    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav aria-label="Pagination">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Prev</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Prev</span></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </nav>
     {% endif %}
-</div>
 
-<!-- Bid Details Modal -->
-<div class="modal fade" id="bidDetailsModal" tabindex="-1" aria-labelledby="bidDetailsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content bg-dark text-light">
-            <div class="modal-header">
-                <h5 class="modal-title" id="bidDetailsModalLabel">Bid Details</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="bidDetailsContent">
-                <!-- Content will be loaded here -->
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Basic Information</h6>
-                        <table class="table table-sm table-dark">
-                            <tr><td><strong>Bid Number:</strong></td><td id="modal-bid-number">-</td></tr>
-                            <tr><td><strong>Date:</strong></td><td id="modal-dated">-</td></tr>
-                            <tr><td><strong>Beneficiary:</strong></td><td id="modal-beneficiary">-</td></tr>
-                            <tr><td><strong>Organization:</strong></td><td id="modal-organisation">-</td></tr>
-                            <tr><td><strong>Department:</strong></td><td id="modal-department">-</td></tr>
-                            <tr><td><strong>Ministry:</strong></td><td id="modal-ministry">-</td></tr>
-                        </table>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Bid Details</h6>
-                        <table class="table table-sm table-dark">
-                            <tr><td><strong>Bid End Date/Time:</strong></td><td id="modal-bid-end-datetime">-</td></tr>
-                            <tr><td><strong>Bid Open Date/Time:</strong></td><td id="modal-bid-open-datetime">-</td></tr>
-                            <tr><td><strong>Validity Days:</strong></td><td id="modal-bid-offer-validity-days">-</td></tr>
-                            <tr><td><strong>Contract Period:</strong></td><td id="modal-contract-period">-</td></tr>
-                            <tr><td><strong>Item Category:</strong></td><td id="modal-item-category">-</td></tr>
-                        </table>
-                    </div>
+    <!-- Raw Text Modal -->
+    <div class="modal fade" id="rawTextModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">Raw Text</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="row mt-3">
-                    <div class="col-md-6">
-                        <h6>Evaluation Details</h6>
-                        <table class="table table-sm table-dark">
-                            <tr><td><strong>Similar Category:</strong></td><td id="modal-similar-category">-</td></tr>
-                            <tr><td><strong>MSE Exemption:</strong></td><td id="modal-mse-exemption">-</td></tr>
-                        </table>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Additional Information</h6>
-                        <table class="table table-sm table-dark">
-                            <tr><td><strong>Source File:</strong></td><td id="modal-source-file">-</td></tr>
-                            <tr><td><strong>Created At:</strong></td><td id="modal-created-at">-</td></tr>
-                            <tr><td><strong>File:</strong></td><td id="modal-file">-</td></tr>
-                        </table>
-                    </div>
+                <div class="modal-body raw-text-modal">
+                    <pre class="bg-dark text-light p-2 mb-0" id="rawTextContainer" style="max-height: 60vh;"></pre>
                 </div>
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <h6>Raw Text Preview</h6>
-                        <div class="bg-secondary p-3 rounded" style="max-height: 200px; overflow-y: auto;">
-                            <pre id="modal-raw-text" class="text-light mb-0" style="white-space: pre-wrap; font-size: 0.9rem;">-</pre>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -462,55 +405,34 @@
 {% endblock %}
 
 {% block scripts %}
+{{ block.super }}
 <script>
-function viewBidDetails(bidNumber, bidId) {
-    // Fetch full bid data from server using bid ID
-    fetch(`/bid_record/api/bid/${bidId}/`)
-        .then(response => response.json())
-        .then(data => {
-            // Populate modal with fetched data
-            document.getElementById('modal-bid-number').textContent = data.bid_number || 'N/A';
-            document.getElementById('modal-dated').textContent = data.dated ? new Date(data.dated).toLocaleDateString() : 'N/A';
-            document.getElementById('modal-beneficiary').textContent = data.beneficiary || 'N/A';
-            document.getElementById('modal-organisation').textContent = data.organisation || 'N/A';
-            document.getElementById('modal-department').textContent = data.department || 'N/A';
-            document.getElementById('modal-ministry').textContent = data.ministry || 'N/A';
-            document.getElementById('modal-bid-end-datetime').textContent = data.bid_end_datetime || 'N/A';
-            document.getElementById('modal-bid-open-datetime').textContent = data.bid_open_datetime || 'N/A';
-            document.getElementById('modal-bid-offer-validity-days').textContent = data.bid_offer_validity_days ? `${data.bid_offer_validity_days} days` : 'N/A';
-            document.getElementById('modal-contract-period').textContent = data.contract_period || 'N/A';
-            document.getElementById('modal-item-category').textContent = data.item_category || 'N/A';
-            document.getElementById('modal-similar-category').textContent = data.similar_category || 'N/A';
-            document.getElementById('modal-mse-exemption').textContent = data.mse_exemption || 'N/A';
-            document.getElementById('modal-source-file').textContent = data.source_file || 'N/A';
-            document.getElementById('modal-created-at').textContent = data.created_at ? new Date(data.created_at).toLocaleString() : 'N/A';
-            document.getElementById('modal-file').textContent = data.file ? 'Available' : 'N/A';
-            document.getElementById('modal-raw-text').textContent = data.raw_text ? data.raw_text.substring(0, 1000) + (data.raw_text.length > 1000 ? '...' : '') : 'N/A';
-            
-            // Show modal
-            const modal = new bootstrap.Modal(document.getElementById('bidDetailsModal'));
-            modal.show();
-        })
-        .catch(error => {
-            console.error('Error fetching bid data:', error);
-            alert('Error fetching bid details. Please try again.');
+document.addEventListener('DOMContentLoaded', function() {
+    var rawTextModal = document.getElementById('rawTextModal');
+    if (rawTextModal) {
+        rawTextModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var raw = button?.getAttribute('data-raw') || '';
+            try { 
+                raw = raw.replaceAll('&lt;','<')
+                         .replaceAll('&gt;','>')
+                         .replaceAll('&amp;','&'); 
+            } catch (e) {}
+            document.getElementById('rawTextContainer').textContent = raw;
         });
-}
+    }
 
-// Add contains selector for older browsers
-if (!Element.prototype.matches) {
-    Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
-}
-
-if (!Element.prototype.closest) {
-    Element.prototype.closest = function(s) {
-        var el = this;
-        do {
-            if (el.matches(s)) return el;
-            el = el.parentElement || el.parentNode;
-        } while (el !== null && el.nodeType === 1);
-        return null;
-    };
-}
+    // Auto-collapse other sections when one is opened
+    document.querySelectorAll('.collapse-toggle').forEach(button => {
+        button.addEventListener('click', function() {
+            const target = this.getAttribute('data-bs-target');
+            document.querySelectorAll('.collapse').forEach(collapse => {
+                if (collapse.id !== target.replace('#', '')) {
+                    bootstrap.Collapse.getInstance(collapse)?.hide();
+                }
+            });
+        });
+    });
+});
 </script>
 {% endblock %}

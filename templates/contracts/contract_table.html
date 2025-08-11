@@ -87,6 +87,61 @@
         background: linear-gradient(135deg, var(--accent-blue), #0077ff);
         border: none;
     }
+    
+    /* User-Friendly Table Improvements */
+    .contracts-table {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .contracts-table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid var(--accent-blue);
+    }
+    
+    .contracts-table td {
+        vertical-align: middle;
+        transition: all 0.2s ease;
+    }
+    
+    .contracts-table tr:hover td {
+        background: rgba(0, 212, 255, 0.08);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 212, 255, 0.1);
+    }
+    
+    .section-header th {
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3));
+        font-weight: 700;
+        text-align: center;
+        padding: 1rem 0.5rem;
+    }
+    
+    /* Better button styling */
+    .btn-sm {
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-sm:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Improved text truncation */
+    .contracts-table td[title] {
+        cursor: help;
+    }
+    
+    /* Better spacing for action buttons */
+    .contracts-table td:last-child {
+        text-align: center;
+        min-width: 100px;
+    }
 </style>
 
 <div id="table-view">
@@ -120,9 +175,9 @@
         </button>
         
         <div class="export-btns d-flex ms-auto mb-2">
-            <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
+            <!-- <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
                 <i class="fas fa-file-excel me-1"></i>Excel
-            </a>
+            </a> -->
             <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
                 <i class="fas fa-file-csv me-1"></i>CSV
             </a>
@@ -134,8 +189,9 @@
             <thead>
                 <tr class="section-header">
                     <th colspan="6">Basic Info</th>
-                    <th colspan="5">Organisation</th>
-                    <th colspan="5">Buyer</th>
+                    <th colspan="4">Organisation</th>
+                    <th colspan="4">Buyer</th>
+                    <th colspan="1">Actions</th>
                 </tr>
                 <tr>
                     <!-- Basic Info -->
@@ -144,12 +200,12 @@
                     <th>Source</th>
                     <th>Value</th>
                     <th>Qty</th>
+                    <th>Type</th>
                     
                     <!-- Organisation -->
-                    <th>Type</th>
                     <th>Ministry</th>
-                    <th>Dept</th>
-                    <th>Org</th>
+                    <th>Department</th>
+                    <th>Organisation</th>
                     <th>Zone</th>
                     
                     <!-- Buyer -->
@@ -157,9 +213,9 @@
                     <th>Contact</th>
                     <th>Email</th>
                     <th>GSTIN</th>
-                    <th>Address</th>
-                    <th>Text</th>
-
+                    
+                    <!-- Actions -->
+                    <th>Details</th>
                 </tr>
             </thead>
             <tbody>
@@ -177,36 +233,42 @@
                     </td>
                     <td>{{ contract.total_value }}</td>
                     <td>{{ contract.total_quantity }}</td>
-                  
+                    <td>{{ contract.org_type }}</td>
                     
                     <!-- Organisation -->
-                    <td>{{ contract.org_type }}</td>
                     <td>{{ contract.ministry }}</td>
                     <td>{{ contract.department }}</td>
                     <td>{{ contract.organisation }}</td>
-                    <td>{{ contract.office_zone }}</td>
+                    <td>{{ contract.office_zone|default:"-" }}</td>
                     
                     <!-- Buyer -->
-                    <td>{{ contract.buyer_designation }}</td>
-                    <td>{{ contract.buyer_contact }}</td>
-                    <td>{{ contract.buyer_email }}</td>
-                    <td>{{ contract.buyer_gstin }}</td>
-                    <td title="{{ contract.buyer_address }}">{{ contract.buyer_address|truncatechars:15 }}</td>
+                    <td title="{{ contract.buyer_designation }}">{{ contract.buyer_designation|truncatechars:20 }}</td>
+                    <td>{{ contract.buyer_contact|default:"-" }}</td>
+                    <td title="{{ contract.buyer_email }}">{{ contract.buyer_email|truncatechars:25 }}</td>
+                    <td>{{ contract.buyer_gstin|default:"-" }}</td>
+                    
+                    <!-- Actions -->
                     <td>
-                        {% if contract.raw_text %}
-                        <button type="button" class="btn btn-sm btn-primary" 
+                        <button type="button" class="btn btn-sm btn-primary me-2" 
                                 data-bs-toggle="modal" 
                                 data-bs-target="#rawTextModal"
                                 data-raw="{{ contract.raw_text|escape }}">
-                            View
+                            <i class="fas fa-eye me-1"></i>View
                         </button>
-                        {% else %}N/A{% endif %}
+                        <button class="btn btn-sm btn-outline-primary" 
+                                type="button" 
+                                data-bs-toggle="collapse" 
+                                data-bs-target="#details-{{ forloop.counter }}"
+                                aria-expanded="false" 
+                                aria-controls="details-{{ forloop.counter }}">
+                            <i class="fas fa-chevron-down me-1"></i>Show Details
+                        </button>
                     </td>
                 </tr>
                 
                 <!-- Expandable row for details -->
                 <tr>
-                    <td colspan="17" class="p-0 border-top-0">
+                    <td colspan="15" class="p-0 border-top-0">
                         <div class="collapse" id="details-{{ forloop.counter }}">
                             <div class="p-2">
                                 <!-- Products Section -->
@@ -263,21 +325,9 @@
                         </div>
                     </td>
                 </tr>
-                <tr>
-                    <td colspan="17" class="text-center py-1">
-                        <button class="btn btn-sm btn-outline-primary" 
-                                type="button" 
-                                data-bs-toggle="collapse" 
-                                data-bs-target="#details-{{ forloop.counter }}"
-                                aria-expanded="false" 
-                                aria-controls="details-{{ forloop.counter }}">
-                            Show Details
-                        </button>
-                    </td>
-                </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="17">No contracts found</td>
+                    <td colspan="15">No contracts found</td>
                 </tr>
                 {% endfor %}
             </tbody>

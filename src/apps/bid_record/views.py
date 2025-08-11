@@ -8,6 +8,9 @@ from django.db.models import Q
 from django.http import JsonResponse, HttpResponse
 from django.views import View
 import pandas as pd
+import json
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 from .utils.serialization import make_serializable
 from .data_extractor import GeMBiddingPDFExtractor
@@ -201,3 +204,86 @@ def get_bid_details_api(request, bid_id):
         return JsonResponse({'error': 'Bid not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def ai_search_bids(request):
+    """AI Semantic Search for Bids using embeddings"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Only POST method allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        query = data.get('query', '').strip()
+        top_k = data.get('top_k', 5)
+        
+        if not query:
+            return JsonResponse({'success': False, 'message': 'Query is required'}, status=400)
+        
+        # Get all bids with embeddings
+        bids = BidDocument.objects.filter(embedding__isnull=False).exclude(embedding='')
+        
+        if not bids.exists():
+            return JsonResponse({'success': False, 'message': 'No bids with embeddings found'}, status=404)
+        
+        # Compute query embedding
+        try:
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            query_embedding = model.encode([query], normalize_embeddings=True)[0]
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f'Error computing query embedding: {str(e)}'}, status=500)
+        
+        # Calculate similarities
+        results = []
+        for bid in bids:
+            try:
+                bid_embedding = np.array(bid.embedding)
+                similarity = cosine_similarity([query_embedding], [bid_embedding])[0][0]
+                results.append({
+                    'bid': bid,
+                    'score': float(similarity)
+                })
+            except Exception as e:
+                print(f"Error processing bid {bid.id}: {e}")
+                continue
+        
+        # Sort by similarity score (descending)
+        results.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Take top_k results
+        top_results = results[:top_k]
+        
+        # Format results for response
+        formatted_results = []
+        for result in top_results:
+            bid = result['bid']
+            formatted_results.append({
+                'id': bid.id,
+                'bid_number': bid.bid_number,
+                'dated': bid.dated.isoformat() if bid.dated else None,
+                'organisation': bid.organisation,
+                'ministry': bid.ministry,
+                'department': bid.department,
+                'beneficiary': bid.beneficiary,
+                'item_category': bid.item_category,
+                'contract_period': bid.contract_period,
+                'score': result['score']
+            })
+        
+        # Generate summary
+        if formatted_results:
+            summary = f"Found {len(formatted_results)} relevant bids for '{query}'"
+        else:
+            summary = f"No relevant bids found for '{query}'"
+        
+        return JsonResponse({
+            'success': True,
+            'results': formatted_results,
+            'summary': summary,
+            'total_found': len(formatted_results)
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Search error: {str(e)}'}, status=500)
