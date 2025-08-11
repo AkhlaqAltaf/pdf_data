@@ -10,6 +10,10 @@
     <div class="card-header">Ask anything</div>
     <div class="card-body">
       <div class="input-group mb-3">
+        <select id="searchType" class="form-select filter-input me-2" style="max-width: 150px;">
+          <option value="contracts">Contracts</option>
+          <option value="bidding">Bidding</option>
+        </select>
         <input id="query" type="text" class="form-control filter-input" placeholder="e.g. contracts in March 2024 about laptops, GSTIN 1234, buyer email..." value="{{ query }}">
         <button id="searchBtn" class="btn btn-primary filter-btn">Search</button>
       </div>
@@ -22,20 +26,34 @@
 <script>
 const runSearch = () => {
   const q = document.getElementById('query').value.trim();
+  const searchType = document.getElementById('searchType').value;
   const btn = document.getElementById('searchBtn');
   const results = document.getElementById('results');
   const summary = document.getElementById('summary');
+  
   if (!q) return;
+  
   btn.disabled = true;
   results.innerHTML = '';
   summary.style.display = 'none';
+  
   const getCookie = (name) => {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
   };
+  
   const csrftoken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-  fetch('{% url "pdf_record:search" %}', {
+  
+  // Determine the search URL based on selected type
+  let searchUrl;
+  if (searchType === 'bidding') {
+    searchUrl = '{% url "bid_record:search" %}';
+  } else {
+    searchUrl = '{% url "pdf_record:search" %}';
+  }
+  
+  fetch(searchUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -50,22 +68,41 @@ const runSearch = () => {
       summary.textContent = data.message || 'Search failed';
       return;
     }
+    
     summary.className = 'status-message status-success';
     summary.style.display = 'block';
     summary.textContent = data.summary || '';
     results.innerHTML = '';
+    
     (data.results || []).forEach(r => {
       const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `
-        <div class="card-body">
-          <div><strong>Contract:</strong> ${r.contract_no}</div>
-          <div><strong>Date:</strong> ${r.generated_date || '-'}</div>
-          <div><strong>Score:</strong> ${r.score.toFixed(3)}</div>
-          <div class="mt-2">
-            <a class="btn btn-sm btn-outline-info" href="{% url 'pdf_record:view' %}?search=${encodeURIComponent(r.contract_no)}">Open in table</a>
-          </div>
-        </div>`
+      card.className = 'card mb-2';
+      
+      if (searchType === 'bidding') {
+        // Bidding results display
+        card.innerHTML = `
+          <div class="card-body">
+            <div><strong>Bid Number:</strong> ${r.bid_number || '-'}</div>
+            <div><strong>Date:</strong> ${r.dated || '-'}</div>
+            <div><strong>Organisation:</strong> ${r.organisation || '-'}</div>
+            <div><strong>Score:</strong> ${r.score.toFixed(3)}</div>
+            <div class="mt-2">
+              <a class="btn btn-sm btn-outline-info" href="{% url 'bid_record:view_bids' %}?search=${encodeURIComponent(r.bid_number || '')}">Open in table</a>
+            </div>
+          </div>`;
+      } else {
+        // Contracts results display
+        card.innerHTML = `
+          <div class="card-body">
+            <div><strong>Contract:</strong> ${r.contract_no || '-'}</div>
+            <div><strong>Date:</strong> ${r.generated_date || '-'}</div>
+            <div><strong>Score:</strong> ${r.score.toFixed(3)}</div>
+            <div class="mt-2">
+              <a class="btn btn-sm btn-outline-info" href="{% url 'pdf_record:view' %}?search=${encodeURIComponent(r.contract_no || '')}">Open in table</a>
+            </div>
+          </div>`;
+      }
+      
       results.appendChild(card);
     });
   }).catch(err => {
@@ -79,6 +116,16 @@ const runSearch = () => {
 document.getElementById('searchBtn').addEventListener('click', runSearch);
 document.getElementById('query').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') runSearch();
+});
+
+// Update placeholder text based on selected type
+document.getElementById('searchType').addEventListener('change', function() {
+  const queryInput = document.getElementById('query');
+  if (this.value === 'bidding') {
+    queryInput.placeholder = 'e.g. bids in March 2024 about security services, organisation ADA, ministry of defence...';
+  } else {
+    queryInput.placeholder = 'e.g. contracts in March 2024 about laptops, GSTIN 1234, buyer email...';
+  }
 });
 </script>
 {% endblock %}

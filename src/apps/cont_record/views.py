@@ -18,7 +18,6 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
-from transformers import pipeline
 
 from src.utils.contract_parsers import parse_contract_text_to_json
 from src.utils.extract_text import read_pdf_with_structure, _extract_english_from_pdf
