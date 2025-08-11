@@ -1,0 +1,64 @@
+{
+  "Organization Details": {
+    "Type": "Central Government",
+    "Ministry": "Ministry of Home Affairs",
+    "Department": "Central Armed Police Forces",
+    "Organization Name": "Central Reserve Police Force (CRPF)",
+    "Office Zone": "Dte. Genl."
+  },
+  "Contract Details": {
+    "Contract No": "GEMC-511687790007193",
+    "Generated Date": "15-May-2021"
+  },
+  "Buyer Details": {
+    "Designation": "DIGP GC KKT",
+    "Contact No": "-",
+    "Email ID": "gckkt@crpf.gov.in",
+    "GSTIN": "N",
+    "Address": "Group Centre, CRPF, P.O.- Gautam Basti, Khatkhati, Assam, Pin- 782480, KARBI ANGLONG, ASSAM-782480, India"
+  },
+  "Financial Approval Detail": {
+    "IFD Concurrence": "Yes",
+    "Designation of Administrative Approval": "DIG, GC CRPF KHATKHATI (ASSAM)",
+    "Designation of Financial Approval": "DIG, GC CRPF KHATKHATI (ASSAM)"
+  },
+  "Paying Authority Details": {
+    "Role": "",
+    "Payment Mode": "CRPFOnline",
+    "Designation": "ACCOUNT OFFICER",
+    "Email ID": "pr.dar4006@crpf.gov.in",
+    "GSTIN": "-",
+    "Address": "Group Centre, CRPF, P.O.- Gautam Basti, Khatkhati"
+  },
+  "Seller Details": {
+    "GeM Seller ID": "83A1180000110080",
+    "Company Name": "Maa Bhawani Enterprises",
+    "Contact No": "09435350071",
+    "Email ID": "maabhawanienterprisesbokajan@gmail.com",
+    "MSME Registration number": "",
+    "GSTIN": "18ATGPD8832N1Z7 , 18ATGPD8832N1Z7",
+    "Address": "WARD NO-3,Maa Bhawani Enterprises, Station Road, Bokajan,BOKAJAN"
+  },
+  "Product Details": {
+    "Item Description": "",
+    "Product Name": "Unbranded White Nylon Thread, 200",
+    "Brand": "NA",
+    "Brand Type": "Unbranded",
+    "Catalogue Status": "Catalogue not verified by OEM",
+    "Selling As": "Reseller not verified by OEM",
+    "Category Name & Quadrant": "",
+    "Model": "",
+    "HSN Code": "",
+    "Ordered Quantity": "000",
+    "Unit": "pieces",
+    "Unit Price (INR)": "3"
+  },
+  "Consignee Detail": {
+    "Designation": "DIGP GC KKT",
+    "Email ID": "gckkt@crpf.gov.in",
+    "Contact": "-",
+    "GSTIN": "N",
+    "Item": "",
+    "Address": "Group Centre, CRPF, P.O.- Gautam"
+  }
+}

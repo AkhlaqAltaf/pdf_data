@@ -1,0 +1,64 @@
+{
+  "Organization Details": {
+    "Type": "Central Government",
+    "Ministry": "Ministry of Defence",
+    "Department": "Department of Military Affairs",
+    "Organization Name": "Indian Army",
+    "Office Zone": ""
+  },
+  "Contract Details": {
+    "Contract No": "GEMC-511687790000660",
+    "Generated Date": "15-Mar-2024"
+  },
+  "Buyer Details": {
+    "Designation": "M Naresh Reddy",
+    "Contact No": "81424-93633-",
+    "Email ID": "mnreddy.158y@gov.in",
+    "GSTIN": "-",
+    "Address": "627 SATA BTY, Ferozepur Cantt, Fazilka Road, Near KV 2, FIROZPUR, PUNJAB-152001, India"
+  },
+  "Financial Approval Detail": {
+    "IFD Concurrence": "No",
+    "Designation of Administrative Approval": "CO",
+    "Designation of Financial Approval": "CO"
+  },
+  "Paying Authority Details": {
+    "Role": "PAO",
+    "Payment Mode": "CGDA-UNIT",
+    "Designation": "VISWA PRATAP SINGH",
+    "Email ID": "vpsingh.954k@nic.in",
+    "GSTIN": "-",
+    "Address": "627 SATA BTY, Ferozepur Cantt, Fazilka Road, Near KV 2"
+  },
+  "Seller Details": {
+    "GeM Seller ID": "95F8200001078299",
+    "Company Name": "BABA FARID ENTERPRISES",
+    "Contact No": "07888860529",
+    "Email ID": "enterprisesfareed738@gmail.com",
+    "MSME Registration number": "UDYAM-PB-04-0000168",
+    "GSTIN": "03DOJPK2330M1Z0",
+    "Address": "KHEWAT NO 287, KHASRA NO 11147636418-1,KHASRA NO 11147636418-1,KHATAUNI NO 645,GURPREET MARKET,7888"
+  },
+  "Product Details": {
+    "Item Description": "",
+    "Product Name": "Unbranded SS-202 8 Seater Restaurant Table",
+    "Brand": "NA",
+    "Brand Type": "Unbranded",
+    "Catalogue Status": "Catalogue not verified by OEM",
+    "Selling As": "Reseller not verified by OEM",
+    "Category Name & Quadrant": "Restaurant Table (Q3)",
+    "Model": "AMBALA FROST",
+    "HSN Code": "9403",
+    "Ordered Quantity": "4",
+    "Unit": "pieces",
+    "Unit Price (INR)": "100"
+  },
+  "Consignee Detail": {
+    "Designation": "M Naresh Reddy",
+    "Email ID": "mnreddy.158y@gov.in",
+    "Contact": "81424-93633-",
+    "GSTIN": "-",
+    "Item": "",
+    "Address": "627 SATA BTY, Ferozepur Cantt, Fazilka Road, Near KV 2"
+  }
+}

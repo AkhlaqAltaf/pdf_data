@@ -1,0 +1,64 @@
+{
+  "Organization Details": {
+    "Type": "Central Government",
+    "Ministry": "Ministry of Home Affairs",
+    "Department": "Central Armed Police Forces",
+    "Organization Name": "Border Security Force (BSF)",
+    "Office Zone": "78 BN BORDER SECURITY FORCE"
+  },
+  "Contract Details": {
+    "Contract No": "GEMC-511687790000438",
+    "Generated Date": "20-Oct-2022"
+  },
+  "Buyer Details": {
+    "Designation": "IC MT FLEET 78 BN",
+    "Contact No": "03512-224362-732127",
+    "Email ID": "pdpfms78bn04@bsf.nic.in",
+    "GSTIN": "-",
+    "Address": "78 BN BSF ,NEAR BSNL OFFICE , SANATNAGAR PO, SRINAGAR, JAMMU KASHMIR-190005, India"
+  },
+  "Financial Approval Detail": {
+    "IFD Concurrence": "Yes",
+    "Designation of Administrative Approval": "COMMANDANT 78 BN BSF",
+    "Designation of Financial Approval": "COMMANDANT"
+  },
+  "Paying Authority Details": {
+    "Role": "",
+    "Payment Mode": "PFMS",
+    "Designation": "VIJAY BHUSHAN DUBEY",
+    "Email ID": "vijay9893@bsf.nic.in",
+    "GSTIN": "-",
+    "Address": "78 BN BSF ,NEAR BSNL OFFICE , SANATNAGAR PO"
+  },
+  "Seller Details": {
+    "GeM Seller ID": "B38D180000415081",
+    "Company Name": "F.I Enterprises",
+    "Contact No": "09906464455",
+    "Email ID": "sheikhimtiyaz4444@gmail.com",
+    "MSME Registration number": "-",
+    "GSTIN": "01AXTPS5311A1ZT",
+    "Address": "03,MAIN ROAD CHANAPORA,CHANAPORA SRINAGAR"
+  },
+  "Product Details": {
+    "Item Description": "",
+    "Product Name": "na COVER OEM Part No. 1547805010",
+    "Brand": "na",
+    "Brand Type": "Registered Brand",
+    "Catalogue Status": "Catalogue not verified by OEM",
+    "Selling As": "OEM verified Reseller",
+    "Category Name & Quadrant": "Wilfit Spares (Q3)",
+    "Model": "WHEEL CYL. KIT",
+    "HSN Code": "HSN not specified by seller",
+    "Ordered Quantity": "1",
+    "Unit": "pieces",
+    "Unit Price (INR)": "120"
+  },
+  "Consignee Detail": {
+    "Designation": "Dy-Comdt",
+    "Email ID": "buycon32.bsf.malda@gembuyer.in",
+    "Contact": "0194-2950747-510",
+    "GSTIN": "-",
+    "Item": "",
+    "Address": "78 BN BSF ,NEAR BSNL OFFICE"
+  }
+}
