@@ -5,166 +5,348 @@
 {% block title %}Contracts Database{% endblock %}
 
 {% block content %}
+<style>
+    /* Compact UI Enhancements */
+    #table-view {
+        padding: 0 15px;
+    }
+    .page-title {
+        margin: 1.5rem 0 1rem;
+        font-size: 1.8rem;
+    }
+    .filter-form {
+        padding: 0.8rem;
+        gap: 0.6rem;
+        margin-bottom: 1rem;
+    }
+    .filter-input, .filter-btn {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.9rem;
+    }
+    .export-btns {
+        gap: 0.7rem;
+    }
+    .action-btn {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.85rem;
+    }
+    .contracts-table th, 
+    .contracts-table td {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.85rem;
+        max-width: 200px;
+    }
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    .collapse-toggle {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.9rem;
+    }
+    .pagination {
+        margin: 1rem 0;
+    }
+    .page-link {
+        padding: 0.3rem 0.6rem;
+    }
+    .section-header th {
+        padding: 0.5rem;
+        font-size: 0.95rem;
+    }
 
-        <div id="table-view" class="mt-5">
-            <h1 class="page-title">CONTRACTS DATABASE</h1>
-            
-            <form class="filter-form" method="get">
-                <input type="text" name="search" value="{{ search_query }}" class="filter-input" placeholder="Search all fields...">
-                <select name="organisation_name" class="filter-input">
-                    <option value="">Organisation</option>
-                    {% for opt in org_options %}
-                    <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-                <select name="department" class="filter-input">
-                    <option value="">Department</option>
-                    {% for opt in dept_options %}
-                    <option value="{{ opt }}" {% if opt == dept_filter %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-                <select name="ministry" class="filter-input">
-                    <option value="">Ministry</option>
-                    {% for opt in ministry_options %}
-                    <option value="{{ opt }}" {% if opt == ministry_filter %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                </select>
-                <input type="date" name="date_from" value="{{ date_from }}" class="filter-input" placeholder="From date">
-                <input type="date" name="date_to" value="{{ date_to }}" class="filter-input" placeholder="To date">
-                <button class="filter-btn" type="submit">
-                    <i class="fas fa-filter me-1"></i>Apply Filters
-                </button>
-                <div class="export-btns">
-                    <a class="action-btn export-btn" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
-                        <i class="fas fa-file-excel me-1"></i>Export Excel
-                    </a>
-                    <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a); color: white;" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
-                        <i class="fas fa-file-csv me-1"></i>Export CSV
-                    </a>
-                </div>
-            </form>
+    /* Color Scheme from Base */
+    .contracts-table th {
+        background: rgba(0, 0, 0, 0.3);
+        color: var(--accent-neon);
+        border-bottom: 2px solid var(--accent-blue);
+    }
+    .contracts-table td {
+                background: rgba(0, 212, 255, 0.05);
 
-            <style>
-                .contracts-table th { white-space: nowrap; }
-                .contracts-table td { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 360px; }
-                .raw-text-modal pre { white-space: pre-wrap; max-height: 60vh; overflow: auto; }
-            </style>
+        color: var(--text-secondary);
+        border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    }
+    .contracts-table tr:hover td {
+        background: rgba(0, 212, 255, 0.05);
+        color: var(--text-primary);
+    }
+    .filter-input {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        color: var(--text-primary);
+    }
+    .filter-btn, .action-btn {
+        background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon));
+        color: var(--primary-dark);
+    }
+    .export-btn {
+        background: linear-gradient(135deg, var(--accent-neon), #00cc66);
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, var(--accent-blue), #0077ff);
+        border: none;
+    }
+</style>
 
- <div class="table-responsive">
-                <table class="contracts-table">
-<thead>
-    <tr>
-        <th>Dated</th>
-        <th>Source File</th>
-        <th>Bid Number</th>
-        <th>Buyer Email</th>
-        <th>Beneficiary</th>
-        <th>Delivery Address</th>
-        <th>Office Name</th>
-        <th>Ministry</th>
-        <th>Department</th>
-        <th>Organisation</th>
-        <th>Estimated Bid Value</th>
-        <th>Total Quantity</th>
-        <th>Contract Period</th>
-        <th>Item Category</th>
-        <th>Raw Text</th>
-    </tr>
-</thead>
-<tbody>
-  {% for r in page_obj.object_list %}
-  <tr>
-    <td>{{ r.dated }}</td>
+<div id="table-view">
+    <h1 class="page-title">CONTRACTS DATABASE</h1>
+    
+    <form class="filter-form d-flex flex-wrap align-items-center" method="get">
+        <input type="text" name="search" value="{{ search_query }}" class="filter-input me-2 mb-2" placeholder="Search...">
+        <select name="organisation_name" class="filter-input me-2 mb-2">
+            <option value="">Organisation</option>
+            {% for opt in org_options %}
+            <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+        </select>
+        <select name="department" class="filter-input me-2 mb-2">
+            <option value="">Department</option>
+            {% for opt in dept_options %}
+            <option value="{{ opt }}" {% if opt == dept_filter %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+        </select>
+        <select name="ministry" class="filter-input me-2 mb-2">
+            <option value="">Ministry</option>
+            {% for opt in ministry_options %}
+            <option value="{{ opt }}" {% if opt == ministry_filter %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="date_from" value="{{ date_from }}" class="filter-input me-2 mb-2" placeholder="From">
+        <input type="date" name="date_to" value="{{ date_to }}" class="filter-input me-2 mb-2" placeholder="To">
+        
+        <button class="filter-btn mb-2" type="submit">
+            <i class="fas fa-filter me-1"></i>Apply
+        </button>
+        
+        <div class="export-btns d-flex ms-auto mb-2">
+            <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
+                <i class="fas fa-file-excel me-1"></i>Excel
+            </a>
+            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
+                <i class="fas fa-file-csv me-1"></i>CSV
+            </a>
+        </div>
+    </form>
 
-    <td>
-      {% if r.source_file %}
-        <a href="{{ r.source_file }}" target="_blank">{{ r.source_filename }}</a>
-      {% else %}
-        N/A
-      {% endif %}
-    </td>
+    <div class="table-responsive">
+        <table class="contracts-table table table-bordered table-striped">
+            <thead>
+                <tr class="section-header">
+                    <th colspan="6">Basic Info</th>
+                    <th colspan="5">Organisation</th>
+                    <th colspan="5">Buyer</th>
+                </tr>
+                <tr>
+                    <!-- Basic Info -->
+                    <th>Contract No</th>
+                    <th>Date</th>
+                    <th>Source</th>
+                    <th>Value</th>
+                    <th>Qty</th>
+                    <th>Text</th>
+                    
+                    <!-- Organisation -->
+                    <th>Type</th>
+                    <th>Ministry</th>
+                    <th>Dept</th>
+                    <th>Org</th>
+                    <th>Zone</th>
+                    
+                    <!-- Buyer -->
+                    <th>Designation</th>
+                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>GSTIN</th>
+                    <th>Address</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for contract in page_obj %}
+                <tr>
+                    <!-- Basic Info -->
+                    <td>{{ contract.contract_no }}</td>
+                    <td>{{ contract.generated_date|date:"Y-m-d" }}</td>
+                    <td>
+                        {% if contract.source_file %}
+                        <a href="{{ contract.source_file }}" target="_blank" title="{{ contract.source_filename }}">
+                            {{ contract.source_filename|truncatechars:15 }}
+                        </a>
+                        {% else %}N/A{% endif %}
+                    </td>
+                    <td>{{ contract.total_value }}</td>
+                    <td>{{ contract.total_quantity }}</td>
+                    <td>
+                        {% if contract.raw_text %}
+                        <button type="button" class="btn btn-sm btn-primary" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#rawTextModal"
+                                data-raw="{{ contract.raw_text|escape }}">
+                            View
+                        </button>
+                        {% else %}N/A{% endif %}
+                    </td>
+                    
+                    <!-- Organisation -->
+                    <td>{{ contract.org_type }}</td>
+                    <td>{{ contract.ministry }}</td>
+                    <td>{{ contract.department }}</td>
+                    <td>{{ contract.organisation }}</td>
+                    <td>{{ contract.office_zone }}</td>
+                    
+                    <!-- Buyer -->
+                    <td>{{ contract.buyer_designation }}</td>
+                    <td>{{ contract.buyer_contact }}</td>
+                    <td>{{ contract.buyer_email }}</td>
+                    <td>{{ contract.buyer_gstin }}</td>
+                    <td title="{{ contract.buyer_address }}">{{ contract.buyer_address|truncatechars:15 }}</td>
+                </tr>
+                
+                <!-- Expandable row for details -->
+                <tr>
+                    <td colspan="17" class="p-0 border-top-0">
+                        <div class="collapse" id="details-{{ forloop.counter }}">
+                            <div class="p-2">
+                                <!-- Products Section -->
+                                <div class="mb-3">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#products-{{ forloop.counter }}">
+                                        Products ({{ contract.products|length }})
+                                    </h6>
+                                    <div class="collapse show" id="products-{{ forloop.counter }}">
+                                        <div class="row row-cols-1 row-cols-md-2 g-2">
+                                            {% for product in contract.products %}
+                                            <div class="col">
+                                                <div class="bg-dark p-2 rounded">
+                                                    <div><strong>Name:</strong> {{ product.name }}</div>
+                                                    <div><strong>Brand:</strong> {{ product.brand }}</div>
+                                                    <div><strong>Qty:</strong> {{ product.quantity }} {{ product.unit }}</div>
+                                                    <div><strong>Price:</strong> {{ product.unit_price }} (Total: {{ product.total_price }})</div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Other sections with similar compact styling -->
+                                <div class="mb-2">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#specs-{{ forloop.counter }}">
+                                        Specs ({{ contract.specifications|length }})
+                                    </h6>
+                                    <div class="collapse" id="specs-{{ forloop.counter }}">
+                                        <ul class="mb-0">
+                                            {% for spec in contract.specifications|slice:":5" %}
+                                            <li>{{ spec|truncatechars:100 }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <!-- Toggle button in the same row -->
+                                <div class="text-center mt-2">
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            type="button" 
+                                            data-bs-toggle="collapse" 
+                                            data-bs-target="#details-{{ forloop.counter }}"
+                                            aria-expanded="false" 
+                                            aria-controls="details-{{ forloop.counter }}">
+                                        Hide Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="17" class="text-center py-1">
+                        <button class="btn btn-sm btn-outline-primary" 
+                                type="button" 
+                                data-bs-toggle="collapse" 
+                                data-bs-target="#details-{{ forloop.counter }}"
+                                aria-expanded="false" 
+                                aria-controls="details-{{ forloop.counter }}">
+                            Show Details
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="17">No contracts found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
-    <td>{{ r.bid_number }}</td>
-    <td>{{ r.buyer_email }}</td>
-    <td>{{ r.beneficiary }}</td>
-    <td>{{ r.delivery_address }}</td>
-    <td>{{ r.office_name }}</td>
-    <td>{{ r.ministry }}</td>
-    <td>{{ r.department }}</td>
-    <td>{{ r.organisation }}</td>
-    <td>{{ r.estimated_bid_value }}</td>
-    <td>{{ r.total_quantity }}</td>
-    <td>{{ r.contract_period }}</td>
-    <td>{{ r.item_category }}</td>
-    <td>
-      {% if r.contract_obj.raw_text %}
-      <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#rawTextModal" data-raw="{{ r.contract_obj.raw_text|escape }}">
-        View
-      </button>
-      {% else %}N/A{% endif %}
-    </td>
-  </tr>
-  {% empty %}
-  <tr>
-    <td colspan="15">No contracts found.</td>
-  </tr>
-  {% endfor %}
-</tbody>
-
-
-
-    </table>
-            </div>
-
-            {% if page_obj.paginator.num_pages > 1 %}
-            <nav aria-label="Pagination">
-              <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Previous</a></li>
-                {% else %}
-                <li class="page-item disabled"><span class="page-link">Previous</span></li>
-                {% endif %}
-                <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-                {% if page_obj.has_next %}
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
-                {% else %}
-                <li class="page-item disabled"><span class="page-link">Next</span></li>
-                {% endif %}
-              </ul>
-            </nav>
+    <!-- Pagination -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav aria-label="Pagination">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Prev</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Prev</span></li>
             {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
 
-            <!-- Raw Text Modal -->
-            <div class="modal fade" id="rawTextModal" tabindex="-1" aria-hidden="true">
-              <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content">
-                  <div class="modal-header">
+    <!-- Raw Text Modal -->
+    <div class="modal fade" id="rawTextModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-secondary">
                     <h5 class="modal-title">Raw Text</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <div class="modal-body raw-text-modal">
-                    <pre id="rawTextContainer"></pre>
-                  </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-              </div>
+                <div class="modal-body raw-text-modal">
+                    <pre class="bg-dark text-light p-2 mb-0" id="rawTextContainer" style="max-height: 60vh;"></pre>
+                </div>
             </div>
         </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  var rawTextModal = document.getElementById('rawTextModal');
-  if (rawTextModal) {
-    rawTextModal.addEventListener('show.bs.modal', function (event) {
-      var button = event.relatedTarget;
-      var raw = button?.getAttribute('data-raw') || '';
-      // Unescape HTML entities
-      try { raw = raw.replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&amp;','&'); } catch (e) {}
-      document.getElementById('rawTextContainer').textContent = raw;
+    var rawTextModal = document.getElementById('rawTextModal');
+    if (rawTextModal) {
+        rawTextModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var raw = button?.getAttribute('data-raw') || '';
+            try { 
+                raw = raw.replaceAll('&lt;','<')
+                         .replaceAll('&gt;','>')
+                         .replaceAll('&amp;','&'); 
+            } catch (e) {}
+            document.getElementById('rawTextContainer').textContent = raw;
+        });
+    }
+
+    // Auto-collapse other sections when one is opened
+    document.querySelectorAll('.collapse-toggle').forEach(button => {
+        button.addEventListener('click', function() {
+            const target = this.getAttribute('data-bs-target');
+            document.querySelectorAll('.collapse').forEach(collapse => {
+                if (collapse.id !== target.replace('#', '')) {
+                    bootstrap.Collapse.getInstance(collapse)?.hide();
+                }
+            });
+        });
     });
-  }
 });
 </script>
 {% endblock %}

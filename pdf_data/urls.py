@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 from src.apps.cont_record import urls
 urlpatterns = [
     path("", include("src.apps.cont_record.urls", namespace="pdf_record")),
+    path("bid/", include("src.apps.bid_record.urls", namespace="bid_record")),
 
     path('admin/', admin.site.urls),
 

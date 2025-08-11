@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import transaction, connection
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -149,8 +149,10 @@ class ImportDataView(View):
 
 class ContractTableView(View):
     template_name = "contracts/contract_table.html"
+    per_page = 50
 
     def get(self, request):
+        # Extract filters
         search_query = request.GET.get("search", "").strip()
         org_filter = request.GET.get("organisation_name", "").strip()
         dept_filter = request.GET.get("department", "").strip()
@@ -158,141 +160,184 @@ class ContractTableView(View):
         date_from = request.GET.get("date_from", "").strip()
         date_to = request.GET.get("date_to", "").strip()
 
+        # Base queryset with prefetching
         contracts_qs = Contract.objects.select_related(
-            "organization_details", "buyer", "financial_approval",
-            "paying_authority", "seller", "epbg"
-        )
+            "file", "organization_details", "buyer",
+            "financial_approval", "paying_authority", "seller", "epbg"
+        ).prefetch_related(
+            Prefetch('products', queryset=Product.objects.prefetch_related(
+                Prefetch('specifications', queryset=ProductSpecification.objects.all()),
+                Prefetch('consignees', queryset=ConsigneeDetail.objects.all())
+            )),
+            Prefetch('terms', queryset=TermsAndCondition.objects.all())
+        ).order_by('-generated_date', '-created_at')
 
+        # Apply filters
         if org_filter:
             contracts_qs = contracts_qs.filter(organization_details__organisation_name__icontains=org_filter)
         if dept_filter:
             contracts_qs = contracts_qs.filter(organization_details__department__icontains=dept_filter)
         if ministry_filter:
             contracts_qs = contracts_qs.filter(organization_details__ministry__icontains=ministry_filter)
-        # Date range filter
         if date_from:
-            try:
-                df = datetime.strptime(date_from, "%Y-%m-%d").date()
-                contracts_qs = contracts_qs.filter(generated_date__gte=df)
-            except Exception:
-                pass
+            contracts_qs = contracts_qs.filter(generated_date__gte=date_from)
         if date_to:
-            try:
-                dt = datetime.strptime(date_to, "%Y-%m-%d").date()
-                contracts_qs = contracts_qs.filter(generated_date__lte=dt)
-            except Exception:
-                pass
-
+            contracts_qs = contracts_qs.filter(generated_date__lte=date_to)
         if search_query:
             contracts_qs = contracts_qs.filter(
-                Q(contract_no__icontains=search_query)
-                | Q(raw_text__icontains=search_query)
-                | Q(organization_details__organisation_name__icontains=search_query)
-                | Q(organization_details__department__icontains=search_query)
-                | Q(organization_details__ministry__icontains=search_query)
-                | Q(seller__company_name__icontains=search_query)
-                | Q(buyer__email__icontains=search_query)
-                | Q(products__product_name__icontains=search_query)
+                Q(contract_no__icontains=search_query) |
+                Q(organization_details__organisation_name__icontains=search_query) |
+                Q(organization_details__department__icontains=search_query) |
+                Q(organization_details__ministry__icontains=search_query) |
+                Q(seller__company_name__icontains=search_query) |
+                Q(buyer__email__icontains=search_query) |
+                Q(products__product_name__icontains=search_query)
             ).distinct()
 
-        rows = []
-        for c in contracts_qs:
-            raw_rows = Product.objects.filter(contract_id=c.id).values_list('total_price', 'ordered_quantity')
+        # Build comprehensive data structure
+        contract_data = []
+        for contract in contracts_qs:
+            # File info
+            source_file = contract.file.pdf_file.url if contract.file and contract.file.pdf_file else ""
+            source_filename = os.path.basename(urlparse(source_file).path) if source_file else ""
+
+            # Calculate totals
             total_value = Decimal('0')
             total_qty = 0
-            for total_price_raw, ordered_qty_raw in raw_rows:
-                total_value += safe_decimal_from_raw(total_price_raw)
-                total_qty += safe_int_from_raw(ordered_qty_raw)
-                first_product = None
-                first_consignee_addr = ""
-                first_category = ""
-                contract_period = ""
+            for product in contract.products.all():
                 try:
-                    first_product = c.products.first()
-                    if first_product:
-                        first_category = getattr(first_product, "category_name_quadrant", "") or ""
-                        fc = first_product.consignees.first()
-                        if fc:
-                            first_consignee_addr = getattr(fc, "address", "") or ""
-                            ds = getattr(fc, "delivery_start", None)
-                            de = getattr(fc, "delivery_end", None)
-                            if ds and de:
-                                contract_period = f"{ds} - {de}"
-                except Exception:
-                    first_product = None
+                    total_value += Decimal(product.total_price) if product.total_price else Decimal('0')
+                except:
+                    pass
+                try:
+                    total_qty += int(product.ordered_quantity) if product.ordered_quantity else 0
+                except:
+                    pass
 
-                source_file = c.file.pdf_file.url if c.file else ""
-                # get filename safely
-                source_filename = ""
-                if source_file:
-                    try:
-                        # handle urls like /media/pdf_files/foo.pdf
-                        source_filename = os.path.basename(urlparse(source_file).path)
-                    except Exception:
-                        source_filename = source_file
+            # Collect specifications
+            specifications = []
+            for product in contract.products.all():
+                for spec in product.specifications.all():
+                    specifications.append(f"{spec.category}: {spec.sub_spec} = {spec.value}")
 
-            rows.append({
-                "contract_obj": c,
-                "dated": c.generated_date.isoformat() if c.generated_date else "",
-                "source_file": c.file.pdf_file.url,
+            # Collect consignees
+            consignees = []
+            for product in contract.products.all():
+                for consignee in product.consignees.all():
+                    consignees.append(
+                        f"{consignee.designation} - {consignee.address} "
+                        f"(Qty: {consignee.quantity}, Period: {consignee.delivery_start} to {consignee.delivery_end})"
+                    )
+
+            # Collect terms
+            terms = [term.clause_text for term in contract.terms.all()]
+
+            contract_data.append({
+                # Contract fields
+                "contract_no": contract.contract_no,
+                "generated_date": contract.generated_date,
+                "raw_text": contract.raw_text,
+                "source_file": source_file,
                 "source_filename": source_filename,
-                "bid_number": c.contract_no,
-                "buyer_email": getattr(c.buyer, "email", ""),
-                "beneficiary": getattr(c.seller, "company_name", ""),
-                "delivery_address": first_consignee_addr,
-                "office_name": getattr(c.organization_details, "office_zone", ""),
-                "ministry": getattr(c.organization_details, "ministry", ""),
-                "department": getattr(c.organization_details, "department", ""),
-                "organisation": getattr(c.organization_details, "organisation_name", ""),
-                "estimated_bid_value": float(total_value),
+
+                # Organisation details
+                "org_type": contract.organization_details.type if contract.organization_details else "",
+                "ministry": contract.organization_details.ministry if contract.organization_details else "",
+                "department": contract.organization_details.department if contract.organization_details else "",
+                "organisation": contract.organization_details.organisation_name if contract.organization_details else "",
+                "office_zone": contract.organization_details.office_zone if contract.organization_details else "",
+
+                # Buyer details
+                "buyer_designation": contract.buyer.designation if contract.buyer else "",
+                "buyer_contact": contract.buyer.contact_no if contract.buyer else "",
+                "buyer_email": contract.buyer.email if contract.buyer else "",
+                "buyer_gstin": contract.buyer.gstin if contract.buyer else "",
+                "buyer_address": contract.buyer.address if contract.buyer else "",
+
+                # Financial approval
+                "ifd_concurrence": "Yes" if contract.financial_approval and contract.financial_approval.ifd_concurrence else "No",
+                "admin_approval": contract.financial_approval.admin_approval_designation if contract.financial_approval else "",
+                "financial_approval": contract.financial_approval.financial_approval_designation if contract.financial_approval else "",
+
+                # Paying authority
+                "paying_role": contract.paying_authority.role if contract.paying_authority else "",
+                "payment_mode": contract.paying_authority.payment_mode if contract.paying_authority else "",
+                "paying_designation": contract.paying_authority.designation if contract.paying_authority else "",
+                "paying_email": contract.paying_authority.email if contract.paying_authority else "",
+                "paying_gstin": contract.paying_authority.gstin if contract.paying_authority else "",
+                "paying_address": contract.paying_authority.address if contract.paying_authority else "",
+
+                # Seller details
+                "gem_seller_id": contract.seller.gem_seller_id if contract.seller else "",
+                "seller_company": contract.seller.company_name if contract.seller else "",
+                "seller_contact": contract.seller.contact_no if contract.seller else "",
+                "seller_email": contract.seller.email if contract.seller else "",
+                "seller_address": contract.seller.address if contract.seller else "",
+                "msme_reg": contract.seller.msme_registration_number if contract.seller else "",
+                "seller_gstin": contract.seller.gstin if contract.seller else "",
+
+                # Products
+                "products": [
+                    {
+                        "name": p.product_name,
+                        "brand": p.brand,
+                        "type": p.brand_type,
+                        "status": p.catalogue_status,
+                        "selling_as": p.selling_as,
+                        "category": p.category_name_quadrant,
+                        "model": p.model,
+                        "hsn": p.hsn_code,
+                        "quantity": p.ordered_quantity,
+                        "unit": p.unit,
+                        "unit_price": p.unit_price,
+                        "tax": p.tax_bifurcation,
+                        "total_price": p.total_price,
+                        "note": p.note
+                    } for p in contract.products.all()
+                ],
+                "specifications": specifications,
+
+                # Consignees
+                "consignees": consignees,
+
+                # EPBG
+                "epbg_detail": contract.epbg.detail if contract.epbg else "",
+
+                # Terms
+                "terms": terms,
+
+                # Calculated values
+                "total_value": total_value,
                 "total_quantity": total_qty,
-                "contract_period": contract_period,
-                "item_category": first_category,
             })
 
-        # export handling
+        # Export handling
         if request.GET.get("export") in ["excel", "csv"]:
-            return self.export_data(rows, request.GET.get("export"))
+            return self.export_data(contract_data, request.GET.get("export"))
 
-        # paginate rows list (100 per page)
-        paginator = Paginator(rows, 100)
-        page = request.GET.get("page", 1)
-        try:
-            page_obj = paginator.page(page)
-        except PageNotAnInteger:
-            page_obj = paginator.page(1)
-        except EmptyPage:
-            page_obj = paginator.page(paginator.num_pages)
+        # Pagination
+        paginator = Paginator(contract_data, self.per_page)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
 
-        # distinct filter options
-        org_options = list(
-            OrganisationDetail.objects.exclude(organisation_name="").values_list("organisation_name", flat=True).distinct()
-        )
-        dept_options = list(
-            OrganisationDetail.objects.exclude(department="").values_list("department", flat=True).distinct()
-        )
-        ministry_options = list(
-            OrganisationDetail.objects.exclude(ministry="").values_list("ministry", flat=True).distinct()
-        )
+        # Filter options
+        org_options = OrganisationDetail.objects.exclude(organisation_name="").values_list("organisation_name",
+                                                                                           flat=True).distinct()
+        dept_options = OrganisationDetail.objects.exclude(department="").values_list("department", flat=True).distinct()
+        ministry_options = OrganisationDetail.objects.exclude(ministry="").values_list("ministry", flat=True).distinct()
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "rows": rows,  # full list if needed for export links
-                "page_obj": page_obj,
-                "search_query": search_query,
-                "org_filter": org_filter,
-                "dept_filter": dept_filter,
-                "ministry_filter": ministry_filter,
-                "date_from": date_from,
-                "date_to": date_to,
-                "org_options": org_options,
-                "dept_options": dept_options,
-                "ministry_options": ministry_options,
-            },
-        )
-
+        return render(request, self.template_name, {
+            "page_obj": page_obj,
+            "search_query": search_query,
+            "org_filter": org_filter,
+            "dept_filter": dept_filter,
+            "ministry_filter": ministry_filter,
+            "date_from": date_from,
+            "date_to": date_to,
+            "org_options": org_options,
+            "dept_options": dept_options,
+            "ministry_options": ministry_options,
+        })
     def export_data(self, rows, file_type):
         df = pd.DataFrame(rows)
         if "contract_obj" in df.columns:

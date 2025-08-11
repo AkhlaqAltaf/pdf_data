@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload Bid Document</title>
+</head>
+<body>
+    <h2>Upload PDF</h2>
+
+    {% if not preview %}
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="file" name="file" accept="application/pdf" required>
+            <button type="submit" name="upload_file">Upload & Extract</button>
+        </form>
+    {% endif %}
+
+    {% if preview %}
+        <h3>Preview Extracted Data</h3>
+        <table border="1">
+            {% for key, value in data.items %}
+                <tr>
+                    <th>{{ key }}</th>
+                    <td>{{ value }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+        <form method="POST" action="{% url 'bid_record:upload_bid_document' %}">
+            {% csrf_token %}
+            <button type="submit" name="save_data">Save to Database</button>
+        </form>
+    {% endif %}
+</body>
+</html>

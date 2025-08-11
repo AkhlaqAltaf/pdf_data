@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'src.apps.cont_record.apps.ContractRecordAppConfig'
+    'src.apps.cont_record.apps.ContractRecordAppConfig',
+    'src.apps.bid_record.apps.BidRecordAppConfig',
 ]
 
 
