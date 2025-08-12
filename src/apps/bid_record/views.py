@@ -89,15 +89,30 @@ class BidTableView(View):
             bids_qs = bids_qs.filter(dated__lte=date_to)
         if search_query:
             bids_qs = bids_qs.filter(
+                # Bid basic info
                 Q(bid_number__icontains=search_query) |
+                Q(dated__icontains=search_query) |
+                Q(source_file__icontains=search_query) |
+                
+                # Organisation details
                 Q(organisation__icontains=search_query) |
                 Q(department__icontains=search_query) |
                 Q(ministry__icontains=search_query) |
+                
+                # Bid details
                 Q(beneficiary__icontains=search_query) |
+                Q(contract_period__icontains=search_query) |
                 Q(item_category__icontains=search_query) |
                 Q(similar_category__icontains=search_query) |
                 Q(mse_exemption__icontains=search_query) |
-                Q(contract_period__icontains=search_query)
+                
+                # Bid timing
+                Q(bid_end_datetime__icontains=search_query) |
+                Q(bid_open_datetime__icontains=search_query) |
+                Q(bid_offer_validity_days__icontains=search_query) |
+                
+                # Raw text for comprehensive search
+                Q(raw_text__icontains=search_query)
             ).distinct()
 
         # Build comprehensive data structure

@@ -23,42 +23,7 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 from src.apps.bid_record.models import BidDocument
 
-# Global embedding model cache for thread safety
-_embedding_model_cache = {}
-_embedding_model_lock = threading.Lock()
 
-def get_global_embedding_model():
-    """Get a global embedding model instance for thread safety"""
-    global _embedding_model_cache
-    
-    with _embedding_model_lock:
-        if 'model' not in _embedding_model_cache:
-            try:
-                import torch
-                from sentence_transformers import SentenceTransformer
-                
-                # Force CPU device to avoid GPU conflicts
-                device = torch.device('cpu')
-                
-                # Load model with specific device
-                model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-                
-                # Ensure model is properly loaded on CPU
-                if hasattr(model, 'to'):
-                    model = model.to(device)
-                
-                # Store in cache
-                _embedding_model_cache['model'] = model
-                _embedding_model_cache['device'] = device
-                
-                print(f"✅ Global embedding model loaded on {device}")
-                
-            except Exception as e:
-                print(f"❌ Failed to load global embedding model: {e}")
-                _embedding_model_cache['model'] = None
-                _embedding_model_cache['device'] = None
-    
-    return _embedding_model_cache.get('model'), _embedding_model_cache.get('device')
 
 class ProcessLogger:
     """Comprehensive logging for PDF processing operations"""
@@ -217,21 +182,7 @@ class ProcessLogger:
             'summary_file': self.log_dir / f"{self.session_id}_summary.json"
         }
 
-def preload_embedding_model():
-    """Pre-load the embedding model to avoid conflicts during multi-threading"""
-    print("🔄 Pre-loading embedding model for multi-threading...")
-    
-    try:
-        model, device = get_global_embedding_model()
-        if model is not None:
-            print(f"✅ Embedding model pre-loaded successfully on {device}")
-            return True
-        else:
-            print("❌ Failed to pre-load embedding model")
-            return False
-    except Exception as e:
-        print(f"❌ Error pre-loading embedding model: {e}")
-        return False
+
 
 class GeMBiddingPDFExtractor:
     def __init__(self, pdf_path):
@@ -300,18 +251,293 @@ class GeMBiddingPDFExtractor:
         
         return text
     
-    def extract_field_value(self, text, field_pattern, section_text=""):
-        """Extract field value using regex pattern"""
+    def extract_field_value_robust(self, text, field_patterns, section_text=""):
+        """Extract field value using multiple patterns to handle both Hindi-first and English-first text"""
         if section_text:
             search_text = section_text
         else:
             search_text = text
-            
-        match = re.search(field_pattern, search_text, re.IGNORECASE | re.DOTALL)
-        if match:
-            value = match.group(1).strip()
-            return self.clean_text(value)
+        
+        # If field_patterns is a string, convert to list
+        if isinstance(field_patterns, str):
+            field_patterns = [field_patterns]
+        
+        # Try each pattern
+        for pattern in field_patterns:
+            match = re.search(pattern, search_text, re.IGNORECASE | re.DOTALL)
+            if match:
+                value = match.group(1).strip()
+                return self.clean_text(value)
+        
         return ""
+    
+    def extract_field_value_with_fallback(self, text, primary_patterns, fallback_patterns=None, section_text=""):
+        """Extract field value with primary patterns and fallback patterns for different text orders"""
+        if section_text:
+            search_text = section_text
+        else:
+            search_text = text
+        
+        # Try primary patterns first
+        result = self.extract_field_value_robust(search_text, primary_patterns, section_text)
+        if result:
+            return result
+        
+        # If no result, try fallback patterns
+        if fallback_patterns:
+            result = self.extract_field_value_robust(search_text, fallback_patterns, section_text)
+            if result:
+                return result
+        
+        return ""
+    
+    def extract_bidding_data_enhanced(self, text):
+        """Enhanced extraction that handles both Hindi-first and English-first patterns"""
+        bidding_data = {}
+        
+        print(f"🔍 Extracting bidding data with enhanced pattern matching...")
+        print(f"📝 Text length: {len(text)} characters")
+        
+        # Extract dated with multiple patterns
+        date_patterns = [
+            r'dated\s*:\s*([^\n]+)',  # English first: "dated: 15-01-2025"
+            r'([^\n]+)\s*dated\s*:',  # Hindi first: "15-01-2025 dated:"
+            r'\d{1,2}-[A-Za-z]{3}-\d{4}',  # Direct date format
+            r'\d{1,2}/\d{1,2}/\d{4}',  # DD/MM/YYYY format
+            r'\d{4}-\d{1,2}-\d{1,2}'   # YYYY-MM-DD format
+        ]
+        
+        date_value = self.extract_field_value_robust(text, date_patterns)
+        if date_value:
+            # Try to parse the date
+            try:
+                for fmt in ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d-%b-%Y', '%B %d, %Y']:
+                    try:
+                        if fmt == '%B %d, %Y':
+                            date_value = date_value.replace(',', '')
+                        parsed_date = datetime.strptime(date_value, fmt).date()
+                        bidding_data['dated'] = parsed_date
+                        print(f"✅ Date extracted: {parsed_date}")
+                        break
+                    except ValueError:
+                        continue
+            except:
+                bidding_data['dated'] = None
+        else:
+            bidding_data['dated'] = None
+        
+        # Extract bid number with multiple patterns
+        bid_patterns = [
+            r'bid\s*number\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*bid\s*number\s*:',  # Hindi first
+            r'bid\s*no\s*:\s*([^\n]+)',     # Alternative English
+            r'([^\n]+)\s*bid\s*no\s*:',     # Alternative Hindi first
+            r'GEM\d{4}[A-Z]\d+',            # GEM format
+            r'GEM\w*-\d+',                  # GEM with dash
+            r'BID\s*:\s*([^\n]+)',          # BID: format
+            r'([^\n]+)\s*BID\s*:'           # BID: Hindi first
+        ]
+        
+        bid_value = self.extract_field_value_robust(text, bid_patterns)
+        bidding_data['bid_number'] = bid_value
+        if bid_value:
+            print(f"✅ Bid number extracted: {bid_value}")
+        
+        # Extract beneficiary with multiple patterns
+        beneficiary_patterns = [
+            r'beneficiary\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*beneficiary\s*:',  # Hindi first
+            r'Beneficiary\s*\n([^\n]+)',    # Multi-line format
+            r'([^\n]+)\s*Beneficiary\s*\n'  # Multi-line Hindi first
+        ]
+        
+        beneficiary_value = self.extract_field_value_robust(text, beneficiary_patterns)
+        bidding_data['beneficiary'] = beneficiary_value
+        if beneficiary_value:
+            print(f"✅ Beneficiary extracted: {beneficiary_value}")
+        
+        # Extract ministry with multiple patterns
+        ministry_patterns = [
+            r'Ministry/State Name\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Ministry/State Name\s*\n',  # Multi-line Hindi first
+            r'ministry\s*:\s*([^\n]+)',            # English first
+            r'([^\n]+)\s*ministry\s*:',            # Hindi first
+            r'Ministry\s*\n([^\n]+)',              # Alternative multi-line
+            r'([^\n]+)\s*Ministry\s*\n'            # Alternative multi-line Hindi first
+        ]
+        
+        ministry_value = self.extract_field_value_robust(text, ministry_patterns)
+        bidding_data['ministry'] = ministry_value
+        if ministry_value:
+            print(f"✅ Ministry extracted: {ministry_value}")
+        
+        # Extract department with multiple patterns
+        department_patterns = [
+            r'Department Name\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Department Name\s*\n',  # Multi-line Hindi first
+            r'department\s*:\s*([^\n]+)',        # English first
+            r'([^\n]+)\s*department\s*:',        # Hindi first
+            r'Department\s*\n([^\n]+)',          # Alternative multi-line
+            r'([^\n]+)\s*Department\s*\n'        # Alternative multi-line Hindi first
+        ]
+        
+        department_value = self.extract_field_value_robust(text, department_patterns)
+        bidding_data['department'] = department_value
+        if department_value:
+            print(f"✅ Department extracted: {department_value}")
+        
+        # Extract organisation with multiple patterns
+        organisation_patterns = [
+            r'Organisation Name\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Organisation Name\s*\n',  # Multi-line Hindi first
+            r'organisation\s*:\s*([^\n]+)',        # English first
+            r'([^\n]+)\s*organisation\s*:',        # Hindi first
+            r'Organization\s*\n([^\n]+)',          # Alternative spelling
+            r'([^\n]+)\s*Organization\s*\n'        # Alternative spelling Hindi first
+        ]
+        
+        organisation_value = self.extract_field_value_robust(text, organisation_patterns)
+        bidding_data['organisation'] = organisation_value
+        if organisation_value:
+            print(f"✅ Organisation extracted: {organisation_value}")
+        
+        # Extract contract period with multiple patterns
+        period_patterns = [
+            r'Contract Period\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Contract Period\s*\n',  # Multi-line Hindi first
+            r'contract\s*period\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*contract\s*period\s*:',  # Hindi first
+            r'Period\s*\n([^\n]+)',               # Alternative format
+            r'([^\n]+)\s*Period\s*\n'             # Alternative format Hindi first
+        ]
+        
+        period_value = self.extract_field_value_robust(text, period_patterns)
+        bidding_data['contract_period'] = period_value
+        if period_value:
+            print(f"✅ Contract period extracted: {period_value}")
+        
+        # Extract item category with multiple patterns
+        category_patterns = [
+            r'Item Category\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Item Category\s*\n',  # Multi-line Hindi first
+            r'item\s*category\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*item\s*category\s*:',  # Hindi first
+            r'Category\s*\n([^\n]+)',           # Alternative format
+            r'([^\n]+)\s*Category\s*\n'         # Alternative format Hindi first
+        ]
+        
+        category_value = self.extract_field_value_robust(text, category_patterns)
+        if category_value:
+            # Clean up the text - remove Hindi characters but keep English
+            category_value = re.sub(r'[^\x00-\x7F]+', '', category_value)
+            category_value = re.sub(r'\s+', ' ', category_value).strip()
+            bidding_data['item_category'] = category_value
+            print(f"✅ Item category extracted: {category_value}")
+        else:
+            bidding_data['item_category'] = ""
+        
+        # Extract bid end datetime with multiple patterns
+        end_patterns = [
+            r'Bid End Date/Time\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Bid End Date/Time\s*\n',  # Multi-line Hindi first
+            r'bid\s*end\s*date\s*/\s*time\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*bid\s*end\s*date\s*/\s*time\s*:',  # Hindi first
+            r'End Date\s*\n([^\n]+)',              # Alternative format
+            r'([^\n]+)\s*End Date\s*\n'            # Alternative format Hindi first
+        ]
+        
+        end_value = self.extract_field_value_robust(text, end_patterns)
+        bidding_data['bid_end_datetime'] = end_value
+        if end_value:
+            print(f"✅ Bid end datetime extracted: {end_value}")
+        
+        # Extract bid open datetime with multiple patterns
+        open_patterns = [
+            r'Bid Opening\nDate/Time\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Bid Opening\nDate/Time\s*\n',  # Multi-line Hindi first
+            r'bid\s*opening\s*date\s*/\s*time\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*bid\s*opening\s*date\s*/\s*time\s*:',  # Hindi first
+            r'Opening Date\s*\n([^\n]+)',              # Alternative format
+            r'([^\n]+)\s*Opening Date\s*\n'            # Alternative format Hindi first
+        ]
+        
+        open_value = self.extract_field_value_robust(text, open_patterns)
+        bidding_data['bid_open_datetime'] = open_value
+        if open_value:
+            print(f"✅ Bid open datetime extracted: {open_value}")
+        
+        # Extract bid offer validity days with multiple patterns
+        validity_patterns = [
+            r'Bid Offer\nValidity \(From End Date\)\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Bid Offer\nValidity \(From End Date\)\s*\n',  # Multi-line Hindi first
+            r'validity\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*validity\s*:',  # Hindi first
+            r'Validity\s*\n([^\n]+)',    # Alternative format
+            r'([^\n]+)\s*Validity\s*\n'  # Alternative format Hindi first
+        ]
+        
+        validity_value = self.extract_field_value_robust(text, validity_patterns)
+        if validity_value:
+            # Try to extract numeric value
+            numeric_match = re.search(r'(\d+)', validity_value)
+            if numeric_match:
+                try:
+                    bidding_data['bid_offer_validity_days'] = int(numeric_match.group(1))
+                    print(f"✅ Bid offer validity extracted: {bidding_data['bid_offer_validity_days']} days")
+                except:
+                    bidding_data['bid_offer_validity_days'] = None
+            else:
+                bidding_data['bid_offer_validity_days'] = None
+        else:
+            bidding_data['bid_offer_validity_days'] = None
+        
+        # Extract similar category with multiple patterns
+        similar_patterns = [
+            r'Similar Category\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*Similar Category\s*\n',  # Multi-line Hindi first
+            r'similar\s*category\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*similar\s*category\s*:',  # Hindi first
+            r'Similar\s*\n([^\n]+)',              # Alternative format
+            r'([^\n]+)\s*Similar\s*\n'            # Alternative format Hindi first
+        ]
+        
+        similar_value = self.extract_field_value_robust(text, similar_patterns)
+        if similar_value:
+            # Clean up the text - remove Hindi characters but keep English
+            similar_value = re.sub(r'[^\x00-\x7F]+', '', similar_value)
+            similar_value = re.sub(r'\s+', ' ', similar_value).strip()
+            bidding_data['similar_category'] = similar_value
+            print(f"✅ Similar category extracted: {similar_value}")
+        else:
+            bidding_data['similar_category'] = ""
+        
+        # Extract MSE exemption with multiple patterns
+        mse_patterns = [
+            r'MSE Exemption\s*\n([^\n]+)',  # Multi-line format
+            r'([^\n]+)\s*MSE Exemption\s*\n',  # Multi-line Hindi first
+            r'mse\s*exemption\s*:\s*([^\n]+)',  # English first
+            r'([^\n]+)\s*mse\s*exemption\s*:',  # Hindi first
+            r'MSE\s*\n([^\n]+)',                # Alternative format
+            r'([^\n]+)\s*MSE\s*\n'              # Alternative format Hindi first
+        ]
+        
+        mse_value = self.extract_field_value_robust(text, mse_patterns)
+        bidding_data['mse_exemption'] = mse_value
+        if mse_value:
+            print(f"✅ MSE exemption extracted: {mse_value}")
+        
+        # Store source file name
+        bidding_data['source_file'] = os.path.basename(self.pdf_path)
+        
+        # Store raw text (no embedding generation)
+        bidding_data['raw_text'] = text
+        
+        print(f"📊 Extraction complete. Found {len([v for v in bidding_data.values() if v])} fields with data.")
+        return bidding_data
+    
+    def extract_field_value(self, text, field_pattern, section_text=""):
+        """Extract field value using regex pattern (legacy function for compatibility)"""
+        return self.extract_field_value_robust(text, [field_pattern], section_text)
     
     def extract_section_text(self, text, start_marker, end_marker):
         """Extract text between two markers with better boundary handling"""
@@ -329,218 +555,8 @@ class GeMBiddingPDFExtractor:
         return section_text
     
     def extract_bidding_data(self, text):
-        """Extract all bidding data from PDF text"""
-        bidding_data = {}
-        
-        # Core fields - Only extract fields that are actually found in the PDF
-        # Extract dated
-        date_match = re.search(r'dated\s*:\s*([^\n]+)', text, re.IGNORECASE)
-        if date_match:
-            date_str = date_match.group(1).strip()
-            # Try to parse different date formats
-            try:
-                for fmt in ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%B %d, %Y']:
-                    try:
-                        if fmt == '%B %d, %Y':
-                            # Handle "January 15, 2025" format
-                            date_str = date_str.replace(',', '')
-                        parsed_date = datetime.strptime(date_str, fmt).date()
-                        bidding_data['dated'] = parsed_date
-                        break
-                    except ValueError:
-                        continue
-            except:
-                bidding_data['dated'] = None
-        else:
-            # Try alternative date patterns
-            date_match = re.search(r'\d{1,2}-[A-Za-z]{3}-\d{4}', text)
-            if date_match:
-                try:
-                    parsed_date = datetime.strptime(date_match.group(0), '%d-%b-%Y').date()
-                    bidding_data['dated'] = parsed_date
-                except:
-                    bidding_data['dated'] = None
-            else:
-                bidding_data['dated'] = None
-        
-        # Extract bid number
-        bid_match = re.search(r'bid\s*number\s*:\s*([^\n]+)', text, re.IGNORECASE)
-        if bid_match:
-            bidding_data['bid_number'] = bid_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            bid_match = re.search(r'bid\s*no\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if bid_match:
-                bidding_data['bid_number'] = bid_match.group(1).strip()
-            else:
-                # Try GEM format like GEM2025B6442399
-                bidding_match = re.search(r'GEM\d{4}[A-Z]\d+', text)
-                if bidding_match:
-                    bidding_data['bid_number'] = bidding_match.group(0)
-                else:
-                    bidding_match = re.search(r'GEM\w*-\d+', text)
-                    if bidding_match:
-                        bidding_data['bid_number'] = bidding_match.group(0)
-                    else:
-                        bidding_data['bid_number'] = ""
-        
-        # Extract beneficiary
-        beneficiary_match = re.search(r'beneficiary\s*:\s*([^\n]+)', text, re.IGNORECASE)
-        if beneficiary_match:
-            bidding_data['beneficiary'] = beneficiary_match.group(1).strip()
-        else:
-            bidding_data['beneficiary'] = ""
-        
-        # Extract ministry
-        ministry_match = re.search(r'Ministry/State Name\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if ministry_match:
-            bidding_data['ministry'] = ministry_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            ministry_match = re.search(r'ministry\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if ministry_match:
-                bidding_data['ministry'] = ministry_match.group(1).strip()
-            else:
-                bidding_data['ministry'] = ""
-        
-        # Extract department
-        dept_match = re.search(r'Department Name\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if dept_match:
-            bidding_data['department'] = dept_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            dept_match = re.search(r'department\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if dept_match:
-                bidding_data['department'] = dept_match.group(1).strip()
-            else:
-                bidding_data['department'] = ""
-        
-        # Extract organisation
-        org_match = re.search(r'Organisation Name\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if org_match:
-            bidding_data['organisation'] = org_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            org_match = re.search(r'organisation\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if org_match:
-                bidding_data['organisation'] = org_match.group(1).strip()
-            else:
-                bidding_data['organisation'] = ""
-        
-        # Extract contract period
-        period_match = re.search(r'Contract Period\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if period_match:
-            bidding_data['contract_period'] = period_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            period_match = re.search(r'contract\s*period\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if period_match:
-                bidding_data['contract_period'] = period_match.group(1).strip()
-            else:
-                bidding_data['contract_period'] = ""
-        
-        # Extract item category - just capture one line, simple and clean
-        category_match = re.search(r'Item Category\s*\n([^\n]+)', text, re.IGNORECASE)
-        if category_match:
-            category_text = category_match.group(1).strip()
-            # Clean up the text
-            category_text = re.sub(r'[^\x00-\x7F]+', '', category_text)  # Remove non-ASCII
-            category_text = re.sub(r'\s+', ' ', category_text).strip()  # Normalize whitespace
-            bidding_data['item_category'] = category_text
-        else:
-            # Try alternative pattern
-            category_match = re.search(r'item\s*category\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if category_match:
-                category_text = category_match.group(1).strip()
-                category_text = re.sub(r'[^\x00-\x7F]+', '', category_text)
-                category_text = re.sub(r'\s+', ' ', category_text).strip()
-                bidding_data['item_category'] = category_text
-            else:
-                bidding_data['item_category'] = ""
-        
-        # BID DETAILS SECTION - Only extract fields that are actually found
-        # Extract bid end datetime
-        end_match = re.search(r'Bid End Date/Time\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if end_match:
-            bidding_data['bid_end_datetime'] = end_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            end_match = re.search(r'bid\s*end\s*date\s*/\s*time\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-            if end_match:
-                bidding_data['bid_end_datetime'] = end_match.group(1).strip()
-            else:
-                bidding_data['bid_end_datetime'] = ""
-        
-        # Extract bid open datetime
-        open_match = re.search(r'Bid Opening\nDate/Time\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if open_match:
-            bidding_data['bid_open_datetime'] = open_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            open_match = re.search(r'bid\s*opening\s*date\s*/\s*time\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-            if open_match:
-                bidding_data['bid_open_datetime'] = open_match.group(1).strip()
-            else:
-                bidding_data['bid_open_datetime'] = ""
-        
-        # Extract bid offer validity days
-        validity_match = re.search(r'Bid Offer\nValidity \(From End Date\)\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if validity_match:
-            validity_str = validity_match.group(1).strip()
-            # Try to extract numeric value
-            numeric_match = re.search(r'(\d+)', validity_str)
-            if numeric_match:
-                try:
-                    bidding_data['bid_offer_validity_days'] = int(numeric_match.group(1))
-                except:
-                    bidding_data['bid_offer_validity_days'] = None
-            else:
-                bidding_data['bid_offer_validity_days'] = None
-        else:
-            # Try alternative patterns
-            validity_match = re.search(r'bid\s*offer\s*validity\s*\(from\s*end\s*date\)\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-            if validity_match:
-                validity_str = validity_match.group(1).strip()
-                numeric_match = re.search(r'(\d+)', validity_str)
-                if numeric_match:
-                    try:
-                        bidding_data['bid_offer_validity_days'] = int(numeric_match.group(1))
-                    except:
-                        bidding_data['bid_offer_validity_days'] = None
-                else:
-                    bidding_data['bid_offer_validity_days'] = None
-            else:
-                bidding_data['bid_offer_validity_days'] = None
-        
-        # Extract similar category
-        similar_match = re.search(r'Similar Category\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if similar_match:
-            bidding_data['similar_category'] = similar_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            similar_match = re.search(r'similar\s*category\s*:\s*([^\n]+)', text, re.IGNORECASE)
-            if similar_match:
-                bidding_data['similar_category'] = similar_match.group(1).strip()
-            else:
-                bidding_data['similar_category'] = ""
-        
-        # Extract MSE exemption
-        mse_exemption_match = re.search(r'MSE Exemption for Years of\nExperience and Turnover\s*\n([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-        if mse_exemption_match:
-            bidding_data['mse_exemption'] = mse_exemption_match.group(1).strip()
-        else:
-            # Try alternative patterns
-            mse_exemption_match = re.search(r'mse\s*exemption\s*for\s*years\s*of\s*experience\s*and\s*turnover\s*:\s*([^\n]+)', text, re.IGNORECASE | re.DOTALL)
-            if mse_exemption_match:
-                bidding_data['mse_exemption'] = mse_exemption_match.group(1).strip()
-            else:
-                bidding_data['mse_exemption'] = ""
-        
-        # Add source file and raw text
-        bidding_data['source_file'] = os.path.basename(self.pdf_path)
-        bidding_data['raw_text'] = text
-        
-        return bidding_data
+        """Legacy function for backward compatibility - now calls enhanced version"""
+        return self.extract_bidding_data_enhanced(text)
     
     def check_bid_exists(self, bid_number):
         """Check if bid already exists in database"""
@@ -549,78 +565,10 @@ class GeMBiddingPDFExtractor:
         return BidDocument.objects.filter(bid_number=bid_number).exists()
     
     def generate_embedding(self, text):
-        """Generate embedding for the given text using sentence-transformers - SIMPLIFIED VERSION"""
-        try:
-            # Simple, direct approach - no threading complications
-            from sentence_transformers import SentenceTransformer
-            import torch
-            
-            print(f"🔍 [Thread-{threading.current_thread().name}] Starting embedding generation...")
-            
-            # Force CPU device to avoid any GPU issues
-            device = torch.device('cpu')
-            
-            # Load model directly - no caching, no threading issues
-            print(f"🔄 [Thread-{threading.current_thread().name}] Loading sentence transformer model...")
-            model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-            
-            # Ensure model is on CPU
-            model = model.to(device)
-            
-            print(f"✅ [Thread-{threading.current_thread().name}] Model loaded successfully on {device}")
-            
-            # Generate embedding
-            print(f"🔄 [Thread-{threading.current_thread().name}] Generating embedding...")
-            with torch.no_grad():
-                embedding = model.encode([text], normalize_embeddings=True, show_progress_bar=False)
-            
-            # Convert to list
-            embedding_list = embedding[0].tolist()
-            
-            print(f"✅ [Thread-{threading.current_thread().name}] Generated embedding: {len(embedding_list)} dimensions")
-            print(f"📊 [Thread-{threading.current_thread().name}] First 3 values: {embedding_list[:3]}")
-            
-            return embedding_list
-            
-        except Exception as e:
-            print(f"❌ [Thread-{threading.current_thread().name}] Error in embedding generation: {e}")
-            print(f"🔄 [Thread-{threading.current_thread().name}] Trying fallback method...")
-            
-            try:
-                # Fallback: Use a different model
-                from sentence_transformers import SentenceTransformer
-                import torch
-                
-                print(f"🔄 [Thread-{threading.current_thread().name}] Loading fallback model...")
-                model = SentenceTransformer('paraphrase-MiniLM-L3-v2', device='cpu')
-                
-                with torch.no_grad():
-                    embedding = model.encode([text], normalize_embeddings=True, show_progress_bar=False)
-                
-                embedding_list = embedding[0].tolist()
-                print(f"✅ [Thread-{threading.current_thread().name}] Fallback embedding generated: {len(embedding_list)} dimensions")
-                
-                return embedding_list
-                
-            except Exception as fallback_error:
-                print(f"❌ [Thread-{threading.current_thread().name}] Fallback also failed: {fallback_error}")
-                
-                # Last resort: Create a simple embedding
-                print(f"⚠️  [Thread-{threading.current_thread().name}] Creating simple fallback embedding...")
-                
-                # Create a simple hash-based embedding (not ideal but will work)
-                import hashlib
-                text_hash = hashlib.md5(text.encode()).hexdigest()
-                
-                # Convert hash to 384-dimensional vector
-                simple_embedding = []
-                for i in range(384):
-                    # Use hash to generate pseudo-random but consistent values
-                    hash_val = int(text_hash[i % 32], 16)
-                    simple_embedding.append((hash_val - 8) / 8.0)  # Scale to roughly -1 to 1
-                
-                print(f"⚠️  [Thread-{threading.current_thread().name}] Created simple embedding: {len(simple_embedding)} dimensions")
-                return simple_embedding
+        """Generate embedding for the given text - DISABLED (AI search removed)"""
+        # Embedding generation disabled as per user request
+        print("⚠️  Embedding generation disabled - AI search functionality removed")
+        return None
     
     def save_to_django_models(self, text):
         """Save extracted data to Django models"""
@@ -634,18 +582,6 @@ class GeMBiddingPDFExtractor:
             
             # Store cleaned text (without Hindi) in raw_text field
             cleaned_text = self.clean_text_remove_hindi(text)
-            
-            # Generate embedding for the cleaned text - THIS MUST WORK
-            print("🔍 Generating embedding for bid text...")
-            embedding = self.generate_embedding(cleaned_text)
-            
-            # CRITICAL: Ensure we have a valid embedding
-            if embedding is None:
-                print("❌ CRITICAL ERROR: Embedding generation failed completely!")
-                return False
-            
-            print(f"✅ Embedding generated successfully: {len(embedding)} dimensions")
-            print(f"📊 Embedding sample values: {embedding[:3]}")
             
             # Save the PDF file
             pdf_filename = os.path.basename(self.pdf_path)
@@ -672,22 +608,10 @@ class GeMBiddingPDFExtractor:
                     bid_offer_validity_days=self.extracted_data.get('bid_offer_validity_days'),
                     similar_category=self.extracted_data.get('similar_category', ''),
                     mse_exemption=self.extracted_data.get('mse_exemption', ''),
-                    raw_text=cleaned_text,
-                    embedding=embedding
+                    raw_text=cleaned_text
                 )
             
-            # VERIFY the embedding was saved
-            saved_bid = BidDocument.objects.get(bid_number=bid_number)
-            saved_embedding = saved_bid.embedding
-            
-            if saved_embedding and len(saved_embedding) > 0:
-                print(f"✅ SUCCESS: Bid saved with embedding: {len(saved_embedding)} dimensions")
-                print(f"📊 Saved embedding sample: {saved_embedding[:3]}")
-            else:
-                print(f"❌ ERROR: Bid saved but embedding is empty or null!")
-                print(f"📊 Expected embedding length: {len(embedding)}")
-                print(f"📊 Actual saved embedding: {saved_embedding}")
-            
+            print(f"✅ SUCCESS: Bid saved successfully to database")
             return True
             
         except Exception as e:
@@ -708,7 +632,7 @@ class GeMBiddingPDFExtractor:
         print("🔍 Parsing extracted data...")
         
         # Extract bidding data
-        self.extracted_data = self.extract_bidding_data(text)
+        self.extracted_data = self.extract_bidding_data_enhanced(text)
         
         return self.extracted_data
     
@@ -812,6 +736,71 @@ class GeMBiddingPDFExtractor:
         print("\n" + "="*80)
         print(f"Total fields extracted: {len([k for k, v in self.extracted_data.items() if k != 'raw_text' and v])}")
         print("="*80)
+    
+    def analyze_text_patterns(self, text):
+        """Analyze text patterns to understand Hindi-English text structure"""
+        print(f"🔍 Analyzing text patterns for: {os.path.basename(self.pdf_path)}")
+        print("="*80)
+        
+        # Find Hindi text patterns
+        hindi_patterns = re.findall(r'[^\x00-\x7F]+', text)
+        if hindi_patterns:
+            print(f"📝 Found {len(hindi_patterns)} Hindi text patterns:")
+            for i, pattern in enumerate(hindi_patterns[:10], 1):  # Show first 10
+                print(f"  {i}. {pattern}")
+            if len(hindi_patterns) > 10:
+                print(f"  ... and {len(hindi_patterns) - 10} more")
+        else:
+            print("📝 No Hindi text patterns found")
+        
+        # Find English text patterns
+        english_patterns = re.findall(r'\b[A-Za-z]+\s*:\s*[^\n]+', text)
+        if english_patterns:
+            print(f"📝 Found {len(english_patterns)} English field patterns:")
+            for i, pattern in enumerate(english_patterns[:10], 1):  # Show first 10
+                print(f"  {i}. {pattern}")
+            if len(english_patterns) > 10:
+                print(f"  ... and {len(english_patterns) - 10} more")
+        else:
+            print("📝 No English field patterns found")
+        
+        # Find mixed patterns (Hindi + English)
+        mixed_patterns = re.findall(r'[^\x00-\x7F]+\s*[A-Za-z]+|[A-Za-z]+\s*[^\x00-\x7F]+', text)
+        if mixed_patterns:
+            print(f"📝 Found {len(mixed_patterns)} mixed Hindi-English patterns:")
+            for i, pattern in enumerate(mixed_patterns[:10], 1):  # Show first 10
+                print(f"  {i}. {pattern}")
+            if len(mixed_patterns) > 10:
+                print(f"  ... and {len(mixed_patterns) - 10} more")
+        else:
+            print("📝 No mixed Hindi-English patterns found")
+        
+        # Find common field markers
+        field_markers = [
+            'bid number', 'ministry', 'department', 'organisation', 'contract period',
+            'item category', 'bid end date', 'bid opening', 'validity', 'similar category',
+            'mse exemption', 'beneficiary', 'dated'
+        ]
+        
+        print(f"\n🔍 Looking for common field markers:")
+        for marker in field_markers:
+            # Look for both Hindi-first and English-first patterns
+            english_first = re.search(rf'{marker}\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            hindi_first = re.search(rf'([^\n]+)\s*{marker}\s*:', text, re.IGNORECASE)
+            
+            if english_first:
+                print(f"  ✅ {marker}: English-first pattern found")
+            elif hindi_first:
+                print(f"  ✅ {marker}: Hindi-first pattern found")
+            else:
+                print(f"  ❌ {marker}: No pattern found")
+        
+        print("="*80)
+        return {
+            'hindi_patterns': hindi_patterns,
+            'english_patterns': english_patterns,
+            'mixed_patterns': mixed_patterns
+        }
 
 def find_all_pdfs_in_data_directory_recursive(data_dir):
     """Find all PDF files recursively in data directory with improved performance"""
@@ -950,7 +939,7 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
                     extractor.export_to_json()
                     
                     # Get bid details for logging
-                    bid_data = extractor.extract_bidding_data(text)
+                    bid_data = extractor.extract_bidding_data_enhanced(text)
                     bid_number = bid_data.get('bid_number', '')
                     pages_extracted = len(text.split('\n')) if text else 0
                     
@@ -970,7 +959,7 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
                     return True
                 else:
                     # Check if it was skipped due to duplicate
-                    bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
+                    bid_data = extractor.extract_bidding_data_enhanced(extractor.extract_text_from_pdf())
                     bid_number = bid_data.get('bid_number', '')
                     pages_extracted = len(text.split('\n')) if text else 0
                     
@@ -1178,7 +1167,7 @@ def process_all_pdfs_ultra_fast(max_workers=8):
                         print(f"✅ Successfully processed: {os.path.basename(pdf_path)}")
                     else:
                         # Check if it was skipped due to duplicate
-                        bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
+                        bid_data = extractor.extract_bidding_data_enhanced(extractor.extract_text_from_pdf())
                         bid_number = bid_data.get('bid_number', '')
                         if extractor.check_bid_exists(bid_number):
                             chunk_results.append(('skipped', pdf_path))
@@ -1374,7 +1363,7 @@ def process_all_pdfs_in_data_directory():
                     extractor.export_to_json()
                     
                     # Get bid details for logging
-                    bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
+                    bid_data = extractor.extract_bidding_data_enhanced(extractor.extract_text_from_pdf())
                     bid_number = bid_data.get('bid_number', '')
                     pages_extracted = len(text.split('\n')) if text else 0
                     
@@ -1390,7 +1379,7 @@ def process_all_pdfs_in_data_directory():
                     print(f"✅ Successfully processed: {filename}")
                 else:
                     # Check if it was skipped due to duplicate
-                    bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
+                    bid_data = extractor.extract_bidding_data_enhanced(extractor.extract_text_from_pdf())
                     bid_number = bid_data.get('bid_number', '')
                     pages_extracted = len(text.split('\n')) if text else 0
                     
@@ -1476,50 +1465,7 @@ def process_all_pdfs_in_data_directory():
     
     print("="*80)
 
-def generate_embeddings_for_existing_bids():
-    """Generate embeddings for existing bids that don't have them"""
-    try:
-        from src.apps.bid_record.models import BidDocument
-        
-        print("🔍 Checking for bids without embeddings...")
-        
-        # Find bids without embeddings
-        bids_without_embeddings = BidDocument.objects.filter(embedding__isnull=True)
-        
-        print(f"📊 Found {bids_without_embeddings.count()} bids without embeddings")
-        
-        if bids_without_embeddings.count() == 0:
-            print("✅ All bids already have embeddings!")
-            return
-        
-        # Create extractor instance for embedding generation
-        extractor = GeMBiddingPDFExtractor("dummy.pdf")
-        
-        # Generate embeddings for bids
-        bid_count = 0
-        for bid in bids_without_embeddings:
-            try:
-                if bid.raw_text:
-                    print(f"🔍 Generating embedding for bid: {bid.bid_number}")
-                    embedding = extractor.generate_embedding(bid.raw_text)
-                    if embedding:
-                        bid.embedding = embedding
-                        bid.save()
-                        bid_count += 1
-                        print(f"✅ Saved embedding for bid: {bid.bid_number}")
-                    else:
-                        print(f"⚠️  Could not generate embedding for bid: {bid.bid_number}")
-                else:
-                    print(f"⚠️  Bid {bid.bid_number} has no raw_text")
-            except Exception as e:
-                print(f"❌ Error generating embedding for bid {bid.bid_number}: {e}")
-        
-        print(f"\n📊 EMBEDDING GENERATION SUMMARY:")
-        print(f"✅ Bids processed: {bid_count}")
-        print("="*80)
-        
-    except Exception as e:
-        print(f"❌ Error in generate_embeddings_for_existing_bids: {e}")
+
 
 def diagnose_pdf_files():
     """Diagnose PDF files for common issues"""
@@ -1683,34 +1629,7 @@ def view_logs():
     
     print("\n💡 Use '--view-logs' to see this information anytime")
 
-def test_embedding_generation():
-    """Test embedding generation to ensure it's working"""
-    print("🧪 Testing embedding generation...")
-    
-    try:
-        # Create a simple test extractor
-        test_extractor = GeMBiddingPDFExtractor("test.pdf")
-        
-        # Test text
-        test_text = "This is a test bid document for embedding generation."
-        
-        print(f"📝 Test text: {test_text}")
-        
-        # Generate embedding
-        embedding = test_extractor.generate_embedding(test_text)
-        
-        if embedding:
-            print(f"✅ Test embedding generated: {len(embedding)} dimensions")
-            print(f"📊 First 5 values: {embedding[:5]}")
-            print(f"📊 Last 5 values: {embedding[-5:]}")
-            return True
-        else:
-            print("❌ Test embedding generation failed")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Test failed with error: {e}")
-        return False
+
 
 def show_help():
     """Display help information for the script"""
@@ -1721,28 +1640,26 @@ def show_help():
     print("")
     print("Options:")
     print("  --help, -h              Show this help message")
-    print("  --test-embedding, -te   Test embedding generation")
-    print("  --generate-embeddings, -ge  Generate embeddings for existing bids")
+    print("  --analyze-patterns, -ap Analyze text patterns in PDFs")
+    print("  --test-extraction, -tx  Test enhanced extraction on a single PDF")
     print("  --multi-thread, -mt     Process PDFs using multi-threading")
     print("  --workers=N, -w=N       Set number of worker threads (default: 4)")
     print("  --ultra-fast, -uf      Process PDFs using ultra-fast multithreading")
     print("  --ufw=N, -ufw=N        Set number of ultra-fast worker threads (default: 8)")
     print("  --diagnose, -d          Diagnose PDF files for common issues")
     print("  --view-logs, -vl        View recent log files and statistics")
-    print("  --verify-embeddings, -ve  Verify embeddings in database")
     print("")
     print("Examples:")
     print("  python data_extractor.py                    # Process all PDFs in data/ directory")
     print("  python data_extractor.py document.pdf       # Process single PDF file")
-    print("  python data_extractor.py --test-embedding   # Test embedding generation")
     print("  python data_extractor.py --multi-thread     # Multi-threaded processing")
     print("  python data_extractor.py --multi-thread --workers=8  # 8 worker threads")
     print("  python data_extractor.py --ultra-fast       # Ultra-fast multithreading")
     print("  python data_extractor.py --ultra-fast --ufw=16  # 16 ultra-fast worker threads")
-    print("  python data_extractor.py --generate-embeddings      # Generate embeddings")
     print("  python data_extractor.py --diagnose                # Diagnose PDF files")
     print("  python data_extractor.py --view-logs               # View recent logs")
-    print("  python data_extractor.py --verify-embeddings       # Verify database embeddings")
+    print("  python data_extractor.py --analyze-patterns        # Analyze text patterns in PDFs")
+    print("  python data_extractor.py --test-extraction        # Test enhanced extraction on a single PDF")
     print("")
     print("Note: Place PDF files in the 'data/' directory for batch processing")
     print("="*60)
@@ -1762,18 +1679,7 @@ def main():
         # View recent logs
         print("📄 Log Viewer Mode")
         view_logs()
-    elif "--test-embedding" in sys.argv or "-te" in sys.argv:
-        # Test embedding generation
-        print("🧪 Testing embedding generation...")
-        test_embedding_generation()
-    elif "--verify-embeddings" in sys.argv or "-ve" in sys.argv:
-        # Verify embeddings in database
-        print("🔍 Embedding Verification Mode")
-        verify_embeddings_in_database()
-    elif "--generate-embeddings" in sys.argv or "-ge" in sys.argv:
-        # Generate embeddings for existing bids
-        print("🚀 Generating embeddings for existing bids...")
-        generate_embeddings_for_existing_bids()
+
     elif "--multi-thread" in sys.argv or "-mt" in sys.argv:
         # Get number of workers from command line
         max_workers = 4  # Default
@@ -1800,14 +1706,14 @@ def main():
         
         print(f"🚀 Starting ULTRA-FAST processing with {max_workers} workers...")
         process_all_pdfs_ultra_fast(max_workers)
-    elif "--verify-embeddings" in sys.argv or "-ve" in sys.argv:
-        # Verify embeddings in database
-        print("🔍 Verifying embeddings in database...")
-        verify_embeddings_in_database()
-    elif "--test-embedding" in sys.argv or "-te" in sys.argv:
-        # Test embedding generation
-        print("🧪 Testing embedding generation...")
-        test_embedding_generation()
+    elif "--analyze-patterns" in sys.argv or "-ap" in sys.argv:
+        # Analyze text patterns in PDFs
+        print("🔍 Analyzing text patterns in PDFs...")
+        analyze_pdf_text_patterns()
+    elif "--test-extraction" in sys.argv or "-tx" in sys.argv:
+        # Test enhanced extraction on a single PDF
+        print("🧪 Testing enhanced extraction on a single PDF...")
+        test_enhanced_extraction()
     elif len(sys.argv) > 1:
         # Check if PDF path is provided as command line argument
         pdf_path = sys.argv[1]
@@ -1843,6 +1749,120 @@ def main():
     else:
         # Process all PDFs in data directory (single-threaded)
         process_all_pdfs_in_data_directory()
+
+def analyze_pdf_text_patterns():
+    """Analyze text patterns in PDFs to understand Hindi-English text structure"""
+    data_dir = Path(__file__).parent / "data"
+    
+    if not data_dir.exists():
+        print(f"❌ Data directory not found: {data_dir}")
+        return
+    
+    print(f"🔍 Analyzing text patterns in PDFs from: {data_dir}")
+    print("="*80)
+    
+    # Find all PDF files
+    pdf_files = find_all_pdfs_in_data_directory_recursive(str(data_dir))
+    
+    if not pdf_files:
+        print("❌ No PDF files found")
+        return
+    
+    print(f"📁 Found {len(pdf_files)} PDF files")
+    
+    # Analyze first few PDFs to understand patterns
+    for i, pdf_path in enumerate(pdf_files[:5], 1):  # Analyze first 5 PDFs
+        try:
+            print(f"\n🔍 Analyzing PDF {i}/{min(5, len(pdf_files))}: {os.path.basename(pdf_path)}")
+            
+            # Create extractor and extract text
+            extractor = GeMBiddingPDFExtractor(pdf_path)
+            text = extractor.extract_text_from_pdf()
+            
+            if text:
+                # Analyze patterns
+                patterns = extractor.analyze_text_patterns(text)
+                
+                # Show summary
+                print(f"📊 Summary for {os.path.basename(pdf_path)}:")
+                print(f"  - Hindi patterns: {len(patterns['hindi_patterns'])}")
+                print(f"  - English patterns: {len(patterns['english_patterns'])}")
+                print(f"  - Mixed patterns: {len(patterns['mixed_patterns'])}")
+            else:
+                print(f"❌ Could not extract text from {os.path.basename(pdf_path)}")
+                
+        except Exception as e:
+            print(f"❌ Error analyzing {os.path.basename(pdf_path)}: {str(e)}")
+    
+    print("\n" + "="*80)
+    print("📊 TEXT PATTERN ANALYSIS COMPLETE")
+    print("="*80)
+    print("💡 This analysis helps understand how Hindi and English text are structured in your PDFs")
+    print("💡 Use this information to improve extraction patterns if needed")
+    print("="*80)
+
+def test_enhanced_extraction():
+    """Test enhanced extraction on a single PDF to verify pattern matching"""
+    data_dir = Path(__file__).parent / "data"
+    
+    if not data_dir.exists():
+        print(f"❌ Data directory not found: {data_dir}")
+        return
+    
+    print(f"🧪 Testing enhanced extraction from: {data_dir}")
+    print("="*80)
+    
+    # Find PDF files
+    pdf_files = find_all_pdfs_in_data_directory_recursive(str(data_dir))
+    
+    if not pdf_files:
+        print("❌ No PDF files found")
+        return
+    
+    # Test on first PDF
+    pdf_path = pdf_files[0]
+    print(f"📄 Testing on: {os.path.basename(pdf_path)}")
+    
+    try:
+        # Create extractor
+        extractor = GeMBiddingPDFExtractor(pdf_path)
+        
+        # Extract text
+        print("🔍 Extracting text from PDF...")
+        text = extractor.extract_text_from_pdf()
+        
+        if not text:
+            print("❌ No text extracted from PDF")
+            return
+        
+        print(f"✅ Text extracted: {len(text)} characters")
+        
+        # Analyze patterns first
+        print("\n🔍 Analyzing text patterns...")
+        patterns = extractor.analyze_text_patterns(text)
+        
+        # Test enhanced extraction
+        print("\n🧪 Testing enhanced extraction...")
+        extracted_data = extractor.extract_bidding_data_enhanced(text)
+        
+        # Show results
+        print("\n📊 EXTRACTION RESULTS:")
+        print("="*80)
+        for field, value in extracted_data.items():
+            if field != 'raw_text':
+                if value:
+                    print(f"✅ {field}: {value}")
+                else:
+                    print(f"❌ {field}: No data extracted")
+        
+        print("="*80)
+        
+
+        
+    except Exception as e:
+        print(f"❌ Error during test extraction: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

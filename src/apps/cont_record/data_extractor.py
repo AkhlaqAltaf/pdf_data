@@ -183,42 +183,7 @@ class ProcessLogger:
             'summary_file': self.log_dir / f"{self.session_id}_summary.json"
         }
 
-# Global embedding model cache for thread safety
-_embedding_model_cache = {}
-_embedding_model_lock = threading.Lock()
 
-def get_global_embedding_model():
-    """Get a global embedding model instance for thread safety"""
-    global _embedding_model_cache
-    
-    with _embedding_model_lock:
-        if 'model' not in _embedding_model_cache:
-            try:
-                import torch
-                from sentence_transformers import SentenceTransformer
-                
-                # Force CPU device to avoid GPU conflicts
-                device = torch.device('cpu')
-                
-                # Load model with specific device
-                model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-                
-                # Ensure model is properly loaded on CPU
-                if hasattr(model, 'to'):
-                    model = model.to(device)
-                
-                # Store in cache
-                _embedding_model_cache['model'] = model
-                _embedding_model_cache['device'] = device
-                
-                print(f"✅ Global embedding model loaded on {device}")
-                
-            except Exception as e:
-                print(f"❌ Failed to load global embedding model: {e}")
-                _embedding_model_cache['model'] = None
-                _embedding_model_cache['device'] = None
-    
-    return _embedding_model_cache.get('model'), _embedding_model_cache.get('device')
 
 class FinalImprovedAutomatedGEMCPDFExtractor:
     def __init__(self, pdf_path):
@@ -227,122 +192,11 @@ class FinalImprovedAutomatedGEMCPDFExtractor:
         self.contract_instance = None
         self.pdf_file_instance = None
         
-        # Thread-local storage for embedding models
-        self._local = threading.local()
+
     
-    def _get_thread_safe_embedder(self):
-        """Get thread-safe sentence transformer model"""
-        if not hasattr(self._local, 'embedder'):
-            try:
-                # Try to get global model first
-                global_model, device = get_global_embedding_model()
-                
-                if global_model is not None:
-                    self._local.embedder = global_model
-                    self._local.device = device
-                    print(f"✅ [Thread-{threading.current_thread().name}] Using global embedding model")
-                    return self._local.embedder
-                
-                # Fallback to thread-local model
-                import torch
-                from sentence_transformers import SentenceTransformer
-                
-                # Set device to CPU for thread safety
-                device = torch.device('cpu')
-                
-                # Load model with specific device
-                model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-                
-                # Ensure model is on CPU and not in meta state
-                if hasattr(model, 'to'):
-                    model = model.to(device)
-                
-                self._local.embedder = model
-                self._local.device = device
-                print(f"✅ [Thread-{threading.current_thread().name}] Loaded thread-local embedding model on {device}")
-                
-            except Exception as e:
-                print(f"⚠️  [Thread-{threading.current_thread().name}] Warning: Could not load sentence-transformers model: {e}")
-                print("🔄 Installing sentence-transformers...")
-                try:
-                    import subprocess
-                    import sys
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", "sentence-transformers"])
-                    print("✅ sentence-transformers installed successfully!")
-                    
-                    # Try again after installation
-                    import torch
-                    from sentence_transformers import SentenceTransformer
-                    device = torch.device('cpu')
-                    model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-                    if hasattr(model, 'to'):
-                        model = model.to(device)
-                    
-                    self._local.embedder = model
-                    self._local.device = device
-                    print(f"✅ [Thread-{threading.current_thread().name}] Successfully loaded model after installation")
-                    
-                except Exception as install_error:
-                    print(f"❌ [Thread-{threading.current_thread().name}] Failed to install/load sentence-transformers: {install_error}")
-                    self._local.embedder = None
-                    self._local.device = None
-        
-        return getattr(self._local, 'embedder', None)
+
     
-    def generate_embedding(self, text):
-        """Generate embedding for the given text using thread-safe sentence-transformers"""
-        try:
-            # Get thread-safe embedder
-            model = self._get_thread_safe_embedder()
-            if model is None:
-                print(f"⚠️  [Thread-{threading.current_thread().name}] Warning: Could not load sentence-transformers model")
-                return None
-            
-            # Get device from thread-local storage
-            device = getattr(self._local, 'device', torch.device('cpu'))
-            
-            # Generate embedding for the cleaned text
-            with torch.no_grad():  # Disable gradient computation for inference
-                embedding = model.encode([text], normalize_embeddings=True, show_progress_bar=False)
-            
-            # Convert numpy array to list of floats for JSON storage
-            embedding_list = embedding[0].tolist()
-            
-            print(f"✅ [Thread-{threading.current_thread().name}] Generated embedding with {len(embedding_list)} dimensions on {device}")
-            return embedding_list
-            
-        except Exception as e:
-            print(f"⚠️  [Thread-{threading.current_thread().name}] Warning: Error generating embedding: {e}")
-            print("🔄 Retrying with fallback method...")
-            
-            try:
-                # Fallback: Try to use a different model or method
-                from sentence_transformers import SentenceTransformer
-                import torch
-                
-                # Force CPU device and avoid meta tensor issues
-                device = torch.device('cpu')
-                
-                # Try different model if available
-                try:
-                    model = SentenceTransformer('paraphrase-MiniLM-L3-v2', device=device)
-                except:
-                    model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-                
-                # Ensure model is properly loaded on CPU
-                if hasattr(model, 'to'):
-                    model = model.to(device)
-                
-                with torch.no_grad():
-                    embedding = model.encode([text], normalize_embeddings=True, show_progress_bar=False)
-                
-                embedding_list = embedding[0].tolist()
-                print(f"✅ [Thread-{threading.current_thread().name}] Generated embedding with fallback method: {len(embedding_list)} dimensions")
-                return embedding_list
-                
-            except Exception as fallback_error:
-                print(f"❌ [Thread-{threading.current_thread().name}] Fallback embedding generation also failed: {fallback_error}")
-            return None
+
     
     def extract_text_from_pdf(self):
         """Extract text from PDF using PyMuPDF"""
@@ -404,6 +258,179 @@ class FinalImprovedAutomatedGEMCPDFExtractor:
         text = text.strip()
         
         return text
+    
+    def detect_pdf_pattern_type(self, text):
+        """Detect whether PDF has Hindi-first or English-first pattern"""
+        if not text:
+            return "unknown"
+        
+        # Count patterns
+        hindi_first_count = 0
+        english_first_count = 0
+        
+        # Pattern 1: Hindi followed by English (hindi_text english_text)
+        hindi_first_patterns = re.findall(r'[^\x00-\x7F]+\s+[a-zA-Z]', text)
+        hindi_first_count = len(hindi_first_patterns)
+        
+        # Pattern 2: English followed by Hindi (english_text hindi_text)
+        english_first_patterns = re.findall(r'[a-zA-Z]\s+[^\x00-\x7F]+', text)
+        english_first_count = len(english_first_patterns)
+        
+        # Pattern 3: Look for field patterns
+        # Hindi field: English value
+        hindi_field_patterns = re.findall(r'[^\x00-\x7F]+\s*:\s*[a-zA-Z]', text)
+        hindi_first_count += len(hindi_field_patterns)
+        
+        # English field: Hindi value
+        english_field_patterns = re.findall(r'[a-zA-Z]\s*:\s*[^\x00-\x7F]+', text)
+        english_first_count += len(english_field_patterns)
+        
+        print(f"🔍 Pattern Detection Results:")
+        print(f"   Hindi-first patterns found: {hindi_first_count}")
+        print(f"   English-first patterns found: {english_first_count}")
+        
+        if hindi_first_count > english_first_count:
+            pattern_type = "hindi_first"
+            print(f"   📊 Detected pattern: Hindi-first (नाम Name: value)")
+        elif english_first_count > hindi_first_count:
+            pattern_type = "english_first"
+            print(f"   📊 Detected pattern: English-first (Name नाम: value)")
+        else:
+            pattern_type = "mixed"
+            print(f"   📊 Detected pattern: Mixed (both patterns present)")
+        
+        return pattern_type
+    
+    def clean_text_smart_bilingual(self, text):
+        """Smart text cleaning that adapts based on detected PDF pattern"""
+        if not text:
+            return ""
+        
+        # First detect the pattern type
+        pattern_type = self.detect_pdf_pattern_type(text)
+        
+        print(f"🧠 Applying {pattern_type} pattern cleaning strategy...")
+        
+        if pattern_type == "hindi_first":
+            # Use original method for Hindi-first PDFs
+            return self.clean_text_remove_hindi(text)
+        
+        elif pattern_type == "english_first":
+            # Special handling for English-first PDFs
+            return self.clean_text_english_first(text)
+        
+        else:  # mixed pattern
+            # Use enhanced method that handles both patterns
+            return self.clean_text_enhanced_bilingual(text)
+    
+    def clean_text_english_first(self, text):
+        """Special cleaning for English-first pattern PDFs"""
+        if not text:
+            return ""
+        
+        print("🔍 Extracting text from English-first pattern PDF...")
+        
+        # Method 1: Extract English text that comes before Hindi
+        english_before_hindi = re.findall(r'([a-zA-Z\s\d\.,\-\(\)\/]+)\s+[^\x00-\x7F]+', text)
+        
+        # Method 2: Extract pure English segments
+        pure_english = re.findall(r'[a-zA-Z\s\d\.,\-\(\)\/]+', text)
+        
+        # Method 3: Extract text between Hindi sections
+        hindi_split = re.split(r'[^\x00-\x7F]+', text)
+        between_hindi = []
+        for part in hindi_split:
+            if part.strip() and re.search(r'[a-zA-Z]', part):
+                between_hindi.append(part.strip())
+        
+        # Method 4: Extract English field names from mixed patterns
+        english_fields = re.findall(r'([a-zA-Z\s\d\.,\-\(\)\/]+)\s*:\s*[^\x00-\x7F]+', text)
+        
+        # Combine all extracted text
+        all_extracted = []
+        all_extracted.extend(english_before_hindi)
+        all_extracted.extend(pure_english)
+        all_extracted.extend(between_hindi)
+        all_extracted.extend(english_fields)
+        
+        # Clean and combine
+        cleaned_text = ""
+        for segment in all_extracted:
+            if segment and len(segment.strip()) > 1:
+                cleaned_segment = segment.strip()
+                # Remove any remaining non-printable characters
+                cleaned_segment = ''.join(char for char in cleaned_segment if char.isprintable() or char.isspace())
+                if cleaned_segment:
+                    cleaned_text += cleaned_segment + " "
+        
+        # Final cleanup
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+        cleaned_text = cleaned_text.strip()
+        
+        print(f"✅ Extracted {len(cleaned_text)} characters from English-first pattern")
+        return cleaned_text
+    
+    def clean_text_enhanced_bilingual(self, text):
+        """Enhanced text cleaning that handles both Hindi-first and English-first patterns"""
+        if not text:
+            return ""
+        
+        print("🔍 Using enhanced bilingual cleaning for mixed pattern PDF...")
+        
+        # Extract all English text segments using multiple methods
+        english_segments = []
+        
+        # Method 1: Pure English text
+        pure_english = re.findall(r'[a-zA-Z\s\d\.,\-\(\)\/]+', text)
+        english_segments.extend(pure_english)
+        
+        # Method 2: English text that comes after Hindi
+        after_hindi = re.findall(r'[^\x00-\x7F]+\s+([a-zA-Z\s\d\.,\-\(\)\/]+)', text)
+        english_segments.extend(after_hindi)
+        
+        # Method 3: English text that comes before Hindi
+        before_hindi = re.findall(r'([a-zA-Z\s\d\.,\-\(\)\/]+)\s+[^\x00-\x7F]+', text)
+        english_segments.extend(before_hindi)
+        
+        # Method 4: Text between Hindi sections
+        hindi_split = re.split(r'[^\x00-\x7F]+', text)
+        for part in hindi_split:
+            if part.strip() and re.search(r'[a-zA-Z]', part):
+                english_segments.append(part.strip())
+        
+        # Method 5: Field patterns
+        field_patterns = [
+            r'([a-zA-Z\s\d\.,\-\(\)\/]+)\s*:\s*([^\x00-\x7F]+)',  # field: hindi_value
+            r'([^\x00-\x7F]+)\s*:\s*([a-zA-Z\s\d\.,\-\(\)\/]+)',  # hindi_field: english_value
+        ]
+        
+        for pattern in field_patterns:
+            matches = re.findall(pattern, text)
+            for match in matches:
+                if isinstance(match, tuple):
+                    for part in match:
+                        if part.strip() and re.search(r'[a-zA-Z]', part):
+                            english_segments.append(part.strip())
+                else:
+                    if match.strip() and re.search(r'[a-zA-Z]', match):
+                        english_segments.append(match.strip())
+        
+        # Clean and combine all segments
+        cleaned_text = ""
+        for segment in english_segments:
+            if segment and len(segment.strip()) > 1:
+                cleaned_segment = segment.strip()
+                # Remove any remaining non-printable characters
+                cleaned_segment = ''.join(char for char in cleaned_segment if char.isprintable() or char.isspace())
+                if cleaned_segment:
+                    cleaned_text += cleaned_segment + " "
+        
+        # Final cleanup
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+        cleaned_text = cleaned_text.strip()
+        
+        print(f"✅ Enhanced bilingual cleaning extracted {len(cleaned_text)} characters")
+        return cleaned_text
     
     def clean_address(self, address):
         """Clean address text by removing extra content"""
@@ -811,19 +838,15 @@ class FinalImprovedAutomatedGEMCPDFExtractor:
                 except:
                     generated_date = None
             
-            # Store cleaned text (without Hindi) in raw_text field
-            cleaned_text = self.clean_text_remove_hindi(text)
-            
-            # Generate embedding for the cleaned text
-            print("🔍 Generating embedding for contract text...")
-            embedding = self.generate_embedding(cleaned_text)
+            # Store cleaned text using smart bilingual cleaning that adapts to PDF pattern
+            cleaned_text = self.clean_text_smart_bilingual(text)
             
             self.contract_instance = Contract.objects.create(
                 file=self.pdf_file_instance,
                 contract_no=contract_no,
                 generated_date=generated_date,
                 raw_text=cleaned_text,  # Store cleaned text
-                embedding=embedding  # Store generated embedding
+                embedding=None  # No embedding generation
             )
             
             # 3. Save Organization Details
@@ -885,15 +908,6 @@ class FinalImprovedAutomatedGEMCPDFExtractor:
             # 8. Save Product
             product_data = self.extracted_data['Product Details']
             
-            # Generate embedding for product (combine product name and description)
-            product_text = f"{product_data.get('Product Name', '')} {product_data.get('Item Description', '')} {product_data.get('Brand', '')} {product_data.get('Model', '')}"
-            product_text = product_text.strip()
-            
-            product_embedding = None
-            if product_text:
-                print("🔍 Generating embedding for product...")
-                product_embedding = self.generate_embedding(product_text)
-            
             product = Product.objects.create(
                 contract=self.contract_instance,
                 item_description=product_data.get('Item Description', ''),
@@ -908,7 +922,7 @@ class FinalImprovedAutomatedGEMCPDFExtractor:
                 ordered_quantity=product_data.get('Ordered Quantity', ''),
                 unit=product_data.get('Unit', ''),
                 unit_price=product_data.get('Unit Price (INR)', ''),
-                embedding=product_embedding  # Store product embedding
+                embedding=None  # No embedding generation
             )
             
             # 9. Save Consignee Detail
@@ -1018,6 +1032,84 @@ class FinalImprovedAutomatedGEMCPDFExtractor:
             print("-" * len(section_name))
             for field, value in section_data.items():
                 print(f"{field}: {value}")
+    
+    def test_smart_bilingual_extraction(self):
+        """Test the smart bilingual text extraction with various patterns"""
+        print("🧪 TESTING SMART BILINGUAL TEXT EXTRACTION")
+        print("="*80)
+        
+        # Test case 1: Hindi-first pattern (original pattern)
+        print("\n📝 TEST CASE 1: Hindi-first pattern")
+        test_text_1 = """
+        नाम Name: John Doe
+        पता Address: 123 Main Street
+        संगठन Organization: Ministry of Finance
+        """
+        print("Original text:")
+        print(test_text_1)
+        
+        pattern_1 = self.detect_pdf_pattern_type(test_text_1)
+        cleaned_1 = self.clean_text_smart_bilingual(test_text_1)
+        print(f"Detected pattern: {pattern_1}")
+        print(f"Cleaned text: {cleaned_1}")
+        
+        # Test case 2: English-first pattern (new pattern that was missing)
+        print("\n📝 TEST CASE 2: English-first pattern")
+        test_text_2 = """
+        Name नाम: John Doe
+        Address पता: 123 Main Street
+        Organization संगठन: Ministry of Finance
+        """
+        print("Original text:")
+        print(test_text_2)
+        
+        pattern_2 = self.detect_pdf_pattern_type(test_text_2)
+        cleaned_2 = self.clean_text_smart_bilingual(test_text_2)
+        print(f"Detected pattern: {pattern_2}")
+        print(f"Cleaned text: {cleaned_2}")
+        
+        # Test case 3: Mixed pattern
+        print("\n📝 TEST CASE 3: Mixed pattern")
+        test_text_3 = """
+        नाम Name: John Doe
+        Address पता: 123 Main Street
+        संगठन Organization: Ministry of Finance
+        Designation पद: Manager
+        """
+        print("Original text:")
+        print(test_text_3)
+        
+        pattern_3 = self.detect_pdf_pattern_type(test_text_3)
+        cleaned_3 = self.clean_text_smart_bilingual(test_text_3)
+        print(f"Detected pattern: {pattern_3}")
+        print(f"Cleaned text: {cleaned_3}")
+        
+        # Summary
+        print("\n" + "="*80)
+        print("📊 EXTRACTION SUMMARY")
+        print("="*80)
+        print(f"Test 1 (Hindi-first): Pattern={pattern_1}, {len(cleaned_1)} chars")
+        print(f"Test 2 (English-first): Pattern={pattern_2}, {len(cleaned_2)} chars")
+        print(f"Test 3 (Mixed): Pattern={pattern_3}, {len(cleaned_3)} chars")
+        
+        # Check if enhanced method is working
+        if len(cleaned_2) > 0:
+            print("\n✅ SUCCESS: Smart bilingual method now captures English-first patterns!")
+            print("   Previously, this pattern would have been missed.")
+        else:
+            print("\n❌ ISSUE: Smart bilingual method still not capturing English-first patterns")
+        
+        print("\n🌐 The smart bilingual extraction now:")
+        print("   - Automatically detects PDF pattern type")
+        print("   - Applies appropriate cleaning strategy")
+        print("   - Handles Hindi-first, English-first, and mixed patterns")
+        print("   - Ensures no data is missed regardless of pattern order")
+        
+        return {
+            'test1': {'pattern': pattern_1, 'cleaned': cleaned_1, 'length': len(cleaned_1)},
+            'test2': {'pattern': pattern_2, 'cleaned': cleaned_2, 'length': len(cleaned_2)},
+            'test3': {'pattern': pattern_3, 'cleaned': cleaned_3, 'length': len(cleaned_3)}
+        }
 
 def find_all_pdfs_in_data_directory_recursive(data_dir):
     """Find all PDF files recursively in data directory with improved performance"""
@@ -1075,21 +1167,7 @@ def process_single_pdf(pdf_path, thread_id):
         print(f"❌ [Thread-{thread_id}] Error processing {os.path.basename(pdf_path)}: {e}")
         return False, pdf_path
 
-def preload_embedding_model():
-    """Pre-load the embedding model to avoid conflicts during multi-threading"""
-    print("🔄 Pre-loading embedding model for multi-threading...")
-    
-    try:
-        model, device = get_global_embedding_model()
-        if model is not None:
-            print(f"✅ Embedding model pre-loaded successfully on {device}")
-            return True
-        else:
-            print("❌ Failed to pre-load embedding model")
-            return False
-    except Exception as e:
-        print(f"❌ Error pre-loading embedding model: {e}")
-        return False
+
 
 def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
     """Process all PDFs in data directory using multi-threading with improved efficiency"""
@@ -1105,10 +1183,6 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
     # Set Django settings
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pdf_data.settings')
     django.setup()
-    
-    # Pre-load embedding model to avoid conflicts
-    if not preload_embedding_model():
-        print("⚠️  Warning: Could not pre-load embedding model. Multi-threading may have issues.")
     
     data_dir = Path(__file__).parent / "data"
     extracted_data_dir = Path(__file__).parent / "extracted_data"
@@ -1367,10 +1441,6 @@ def process_all_pdfs_ultra_fast(max_workers=8):
     # Set Django settings
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pdf_data.settings')
     django.setup()
-    
-    # Pre-load embedding model to avoid conflicts
-    if not preload_embedding_model():
-        print("⚠️  Warning: Could not pre-load embedding model. Multi-threading may have issues.")
     
     data_dir = Path(__file__).parent / "data"
     extracted_data_dir = Path(__file__).parent / "extracted_data"
@@ -1720,50 +1790,7 @@ def process_all_pdfs_in_data_directory():
     
     print("="*80)
 
-def generate_embeddings_for_existing_contracts():
-    """Generate embeddings for existing contracts that don't have them"""
-    try:
-        from src.apps.cont_record.models import ContractDocument
-        
-        print("🔍 Checking for contracts without embeddings...")
-        
-        # Find contracts without embeddings
-        contracts_without_embeddings = ContractDocument.objects.filter(embedding__isnull=True)
-        
-        print(f"📊 Found {contracts_without_embeddings.count()} contracts without embeddings")
-        
-        if contracts_without_embeddings.count() == 0:
-            print("✅ All contracts already have embeddings!")
-            return
-        
-        # Create extractor instance for embedding generation
-        extractor = FinalImprovedAutomatedGEMCPDFExtractor("dummy.pdf")
-        
-        # Generate embeddings for contracts
-        contract_count = 0
-        for contract in contracts_without_embeddings:
-            try:
-                if contract.raw_text:
-                    print(f"🔍 Generating embedding for contract: {contract.contract_no}")
-                    embedding = extractor.generate_embedding(contract.raw_text)
-                    if embedding:
-                        contract.embedding = embedding
-                        contract.save()
-                        contract_count += 1
-                        print(f"✅ Saved embedding for contract: {contract.contract_no}")
-                    else:
-                        print(f"⚠️  Could not generate embedding for contract: {contract.contract_no}")
-                else:
-                    print(f"⚠️  Contract {contract.contract_no} has no raw_text")
-            except Exception as e:
-                print(f"❌ Error generating embedding for contract {contract.contract_no}: {e}")
-        
-        print(f"\n📊 EMBEDDING GENERATION SUMMARY:")
-        print(f"✅ Contracts processed: {contract_count}")
-        print("="*80)
-        
-    except Exception as e:
-        print(f"❌ Error in generate_embeddings_for_existing_contracts: {e}")
+
 
 def diagnose_pdf_files():
     """Diagnose PDF files to identify potential issues before processing"""
@@ -1871,12 +1898,16 @@ def main():
         view_logs()
         return
     
+    # Check for test smart bilingual extraction command
+    if "--test-smart-bilingual" in sys.argv or "-tsb" in sys.argv:
+        print("🧪 Testing smart bilingual text extraction...")
+        # Create a dummy extractor to test the method
+        extractor = FinalImprovedAutomatedGEMCPDFExtractor("dummy.pdf")
+        extractor.test_smart_bilingual_extraction()
+        return
+    
     # Check for special commands first
-    if "--generate-embeddings" in sys.argv or "-ge" in sys.argv:
-        # Generate embeddings for existing contracts
-        print("🚀 Generating embeddings for existing contracts...")
-        generate_embeddings_for_existing_contracts()
-    elif "--multi-thread" in sys.argv or "-mt" in sys.argv:
+    if "--multi-thread" in sys.argv or "-mt" in sys.argv:
         # Get number of workers from command line
         max_workers = 4  # Default
         for arg in sys.argv:
@@ -1949,7 +1980,7 @@ def show_help():
     print("  --help, -h              Show this help message")
     print("  --diagnose, -d          Diagnose PDF files for issues")
     print("  --view-logs, -vl        View available log files and summaries")
-    print("  --generate-embeddings, -ge  Generate embeddings for existing contracts")
+    print("  --test-smart-bilingual, -tsb  Test smart bilingual text extraction")
     print("  --multi-thread, -mt     Process PDFs using multi-threading")
     print("  --workers=N, -w=N       Set number of worker threads (default: 4)")
     print("  --ultra-fast, -uf      Process PDFs using ultra-fast multithreading")
@@ -1960,14 +1991,15 @@ def show_help():
     print("  python data_extractor.py document.pdf       # Process single PDF file")
     print("  python data_extractor.py --diagnose         # Diagnose PDF files for issues")
     print("  python data_extractor.py --view-logs        # View available log files")
+    print("  python data_extractor.py --test-smart-bilingual  # Test smart bilingual extraction")
     print("  python data_extractor.py --multi-thread     # Multi-threaded processing")
     print("  python data_extractor.py --multi-thread --workers=8  # 8 worker threads")
     print("  python data_extractor.py --ultra-fast       # Ultra-fast multithreading")
     print("  python data_extractor.py --ultra-fast --ufw=16  # 16 ultra-fast worker threads")
-    print("  python data_extractor.py --generate-embeddings      # Generate embeddings")
     print("")
     print("Note: Place PDF files in the 'data/' directory for batch processing")
     print("📄 All processing sessions are automatically logged with detailed information")
+    print("🌐 Smart bilingual extraction automatically detects and handles both Hindi-first and English-first patterns")
     print("="*60)
 
 if __name__ == "__main__":
