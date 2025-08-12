@@ -201,13 +201,42 @@ class ContractTableView(View):
             contracts_qs = contracts_qs.filter(generated_date__lte=date_to)
         if search_query:
             contracts_qs = contracts_qs.filter(
+                # Contract basic info
                 Q(contract_no__icontains=search_query) |
+                Q(generated_date__icontains=search_query) |
+                
+                # Organisation details
                 Q(organization_details__organisation_name__icontains=search_query) |
                 Q(organization_details__department__icontains=search_query) |
                 Q(organization_details__ministry__icontains=search_query) |
-                Q(seller__company_name__icontains=search_query) |
+                Q(organization_details__office_zone__icontains=search_query) |
+                
+                # Buyer details
+                Q(buyer__designation__icontains=search_query) |
                 Q(buyer__email__icontains=search_query) |
-                Q(products__product_name__icontains=search_query)
+                Q(buyer__contact_no__icontains=search_query) |
+                Q(buyer__gstin__icontains=search_query) |
+                Q(buyer__address__icontains=search_query) |
+                
+                # Paying authority
+                Q(paying_authority__address__icontains=search_query) |
+                Q(paying_authority__designation__icontains=search_query) |
+                Q(paying_authority__email__icontains=search_query) |
+                Q(paying_authority__gstin__icontains=search_query) |
+                
+                # Seller details
+                Q(seller__company_name__icontains=search_query) |
+                Q(seller__address__icontains=search_query) |
+                Q(seller__email__icontains=search_query) |
+                Q(seller__gstin__icontains=search_query) |
+                
+                # Products
+                Q(products__product_name__icontains=search_query) |
+                Q(products__brand__icontains=search_query) |
+                Q(products__category_name_quadrant__icontains=search_query) |
+                
+                # Raw text for comprehensive search
+                Q(raw_text__icontains=search_query)
             ).distinct()
         
         # Apply AI filter if present
