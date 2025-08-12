@@ -217,3 +217,4 @@ The smart bilingual text extraction solution successfully addresses the original
 ✅ **Backward compatibility**: No breaking changes
 
 **Result**: No more missing data from PDFs with English-first patterns, ensuring complete data extraction regardless of text pattern order.
+

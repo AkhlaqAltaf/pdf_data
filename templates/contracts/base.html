@@ -39,7 +39,10 @@
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(0, 255, 157, 0.1);
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            padding: 0.8rem 0;
+            padding: 0.4rem 0; /* Reduced from 0.8rem to make it more compact */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .navbar-brand {
@@ -49,6 +52,7 @@
             color: var(--accent-neon) !important;
             text-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
             letter-spacing: 1px;
+            text-align: center; /* Center-align the logo text */
         }
 
         .nav-link {
@@ -61,6 +65,11 @@
             border-radius: 4px;
             transition: all 0.3s ease;
             position: relative;
+        }
+
+        /* Ensure navigation links are properly positioned */
+        .navbar-collapse {
+            margin-left: auto;
         }
 
         .nav-link:hover, .nav-link.active {
@@ -82,7 +91,23 @@
 
         /* Main Content */
         .container {
-            max-width: 1200px;
+            max-width: 100%; /* Changed from 1200px to allow full screen width */
+            width: 100%;
+            padding: 0 1rem; /* Add some padding for mobile */
+        }
+
+        /* Content wrapper for margins */
+        .content-wrapper {
+            margin: 0 50px; /* Add 50px left/right margins */
+            width: calc(100% - 100px); /* Adjust width to account for margins */
+        }
+
+        /* Responsive margins */
+        @media (max-width: 768px) {
+            .content-wrapper {
+                margin: 0 20px; /* Reduce margins on mobile */
+                width: calc(100% - 40px);
+            }
         }
 
         .page-title {
@@ -489,8 +514,8 @@
 <body class="bg-light">
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-        <a class="navbar-brand" href="{% url 'pdf_record:import' %}">Vector Eye</a>
+    <div class="content-wrapper">
+        <a class="navbar-brand" href="{% url 'pdf_record:import' %}" style="margin:50px !important;margin-top:30px !important;">VECTOR EYE</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -498,13 +523,13 @@
             <ul class="navbar-nav ms-auto">
              
                 <li class="nav-item">
-                    <a class="nav-link {% if request.path == '/import/' %}active{% endif %}" href="{% url 'pdf_record:import' %}">Import Data</a>
+                    <a class="nav-link {% if request.path == '/import/' %}active{% endif %} fw-bold" href="{% url 'pdf_record:import' %}">IMPORT DATA</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.path == '/view/' %}active{% endif %}" href="{% url 'pdf_record:view' %}">Contract Data</a>
+                    <a class="nav-link {% if request.path == '/view/' %}active{% endif %} fw-bold" href="{% url 'pdf_record:view' %}">CONTRACT DATA</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.path == '/bid/view/' %}active{% endif %}" href="{% url 'bid_record:view_bids' %}">Bid Data</a>
+                    <a class="nav-link {% if request.path == '/bid/view/' %}active{% endif %} fw-bold" href="{% url 'bid_record:view_bids' %}">BID DATA</a>
                 </li>
 {#                <li class="nav-item">#}
 {#                    <a class="nav-link {% if request.path == '/search/' %}active{% endif %}" href="{% url 'pdf_record:search' %}">AI Search</a>#}
@@ -514,7 +539,7 @@
     </div>
 </nav>
 
-<div class="container my-4">
+<div class="content-wrapper mb-2">
     {% block content %}{% endblock %}
 </div>
 
