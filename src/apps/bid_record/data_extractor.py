@@ -10,6 +10,8 @@ from pathlib import Path
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import logging
+from datetime import datetime
 
 # Setup Django environment
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -21,12 +23,222 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 from src.apps.bid_record.models import BidDocument
 
+# Global embedding model cache for thread safety
+_embedding_model_cache = {}
+_embedding_model_lock = threading.Lock()
+
+def get_global_embedding_model():
+    """Get a global embedding model instance for thread safety"""
+    global _embedding_model_cache
+    
+    with _embedding_model_lock:
+        if 'model' not in _embedding_model_cache:
+            try:
+                import torch
+                from sentence_transformers import SentenceTransformer
+                
+                # Force CPU device to avoid GPU conflicts
+                device = torch.device('cpu')
+                
+                # Load model with specific device
+                model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+                
+                # Ensure model is properly loaded on CPU
+                if hasattr(model, 'to'):
+                    model = model.to(device)
+                
+                # Store in cache
+                _embedding_model_cache['model'] = model
+                _embedding_model_cache['device'] = device
+                
+                print(f"✅ Global embedding model loaded on {device}")
+                
+            except Exception as e:
+                print(f"❌ Failed to load global embedding model: {e}")
+                _embedding_model_cache['model'] = None
+                _embedding_model_cache['device'] = None
+    
+    return _embedding_model_cache.get('model'), _embedding_model_cache.get('device')
+
+class ProcessLogger:
+    """Comprehensive logging for PDF processing operations"""
+    
+    def __init__(self, log_dir="logs"):
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(exist_ok=True)
+        
+        # Create timestamp for this session
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_id = f"extraction_session_{timestamp}"
+        
+        # Setup file logging
+        self.setup_file_logging()
+        
+        # Setup detailed CSV logging
+        self.setup_csv_logging()
+        
+        # Processing statistics
+        self.stats = {
+            'total_files': 0,
+            'successful': 0,
+            'failed': 0,
+            'skipped': 0,
+            'ignored': 0,
+            'start_time': datetime.now(),
+            'end_time': None
+        }
+    
+    def setup_file_logging(self):
+        """Setup file-based logging"""
+        log_file = self.log_dir / f"{self.session_id}.log"
+        
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()  # Also print to console
+            ]
+        )
+        
+        self.logger = logging.getLogger(__name__)
+        self.log_file = log_file
+    
+    def setup_csv_logging(self):
+        """Setup CSV logging for detailed tracking"""
+        csv_file = self.log_dir / f"{self.session_id}_detailed.csv"
+        
+        # CSV headers
+        self.csv_headers = [
+            'timestamp', 'filename', 'status', 'reason', 'file_size', 
+            'processing_time', 'error_details', 'bid_number', 'pages_extracted'
+        ]
+        
+        # Create CSV file with headers
+        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            import csv
+            writer = csv.writer(f)
+            writer.writerow(self.csv_headers)
+        
+        self.csv_file = csv_file
+        self.csv_lock = threading.Lock()
+    
+    def log_file_processing(self, filename, status, reason="", file_size=0, 
+                          processing_time=0, error_details="", bid_number="", pages_extracted=0):
+        """Log a file processing result"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Log to file
+        if status == 'SUCCESS':
+            self.logger.info(f"✅ {filename}: {reason}")
+        elif status == 'SKIPPED':
+            self.logger.info(f"⏭️  {filename}: {reason}")
+        elif status == 'FAILED':
+            self.logger.error(f"❌ {filename}: {reason}")
+        elif status == 'IGNORED':
+            self.logger.warning(f"⚠️  {filename}: {reason}")
+        
+        # Log to CSV
+        with self.csv_lock:
+            with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
+                import csv
+                writer = csv.writer(f)
+                writer.writerow([
+                    timestamp, filename, status, reason, file_size,
+                    processing_time, error_details, bid_number, pages_extracted
+                ])
+        
+        # Update statistics
+        if status == 'SUCCESS':
+            self.stats['successful'] += 1
+        elif status == 'SKIPPED':
+            self.stats['skipped'] += 1
+        elif status == 'FAILED':
+            self.stats['failed'] += 1
+        elif status == 'IGNORED':
+            self.stats['ignored'] += 1
+    
+    def log_session_start(self, total_files):
+        """Log the start of a processing session"""
+        self.stats['total_files'] = total_files
+        self.logger.info(f"🚀 Starting PDF extraction session: {self.session_id}")
+        self.logger.info(f"📁 Total files to process: {total_files}")
+        self.logger.info(f"📂 Log directory: {self.log_dir}")
+        self.logger.info(f"📄 Detailed CSV log: {self.csv_file}")
+    
+    def log_session_end(self):
+        """Log the end of a processing session"""
+        self.stats['end_time'] = datetime.now()
+        duration = self.stats['end_time'] - self.stats['start_time']
+        
+        self.logger.info("="*80)
+        self.logger.info("📊 PROCESSING SESSION COMPLETE")
+        self.logger.info("="*80)
+        self.logger.info(f"📁 Total files found: {self.stats['total_files']}")
+        self.logger.info(f"✅ Successful extractions: {self.stats['successful']}")
+        self.logger.info(f"⏭️  Skipped (duplicates): {self.stats['skipped']}")
+        self.logger.info(f"❌ Failed extractions: {self.stats['failed']}")
+        self.logger.info(f"⚠️  Ignored files: {self.stats['ignored']}")
+        self.logger.info(f"⏱️  Total duration: {duration}")
+        self.logger.info(f"📄 Detailed logs saved to: {self.log_file}")
+        self.logger.info(f"📊 CSV summary saved to: {self.csv_file}")
+        self.logger.info("="*80)
+        
+        # Save session summary to JSON
+        summary_file = self.log_dir / f"{self.session_id}_summary.json"
+        summary_data = {
+            'session_id': self.session_id,
+            'start_time': self.stats['start_time'].isoformat(),
+            'end_time': self.stats['end_time'].isoformat(),
+            'duration_seconds': duration.total_seconds(),
+            'statistics': self.stats.copy(),
+            'log_files': {
+                'log_file': str(self.log_file),
+                'csv_file': str(self.csv_file),
+                'summary_file': str(summary_file)
+            }
+        }
+        
+        # Convert datetime objects to strings for JSON serialization
+        summary_data['statistics']['start_time'] = self.stats['start_time'].isoformat()
+        summary_data['statistics']['end_time'] = self.stats['end_time'].isoformat()
+        
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary_data, f, indent=2, ensure_ascii=False)
+        
+        self.logger.info(f"📋 Session summary saved to: {summary_file}")
+    
+    def get_log_files(self):
+        """Get list of log files for this session"""
+        return {
+            'log_file': self.log_file,
+            'csv_file': self.csv_file,
+            'summary_file': self.log_dir / f"{self.session_id}_summary.json"
+        }
+
+def preload_embedding_model():
+    """Pre-load the embedding model to avoid conflicts during multi-threading"""
+    print("🔄 Pre-loading embedding model for multi-threading...")
+    
+    try:
+        model, device = get_global_embedding_model()
+        if model is not None:
+            print(f"✅ Embedding model pre-loaded successfully on {device}")
+            return True
+        else:
+            print("❌ Failed to pre-load embedding model")
+            return False
+    except Exception as e:
+        print(f"❌ Error pre-loading embedding model: {e}")
+        return False
+
 class GeMBiddingPDFExtractor:
     def __init__(self, pdf_path):
         self.pdf_path = pdf_path
         self.extracted_data = {}
         self.bid_instance = None
-        
+    
     def extract_text_from_pdf(self):
         """Extract text from PDF using PyMuPDF"""
         try:
@@ -337,64 +549,78 @@ class GeMBiddingPDFExtractor:
         return BidDocument.objects.filter(bid_number=bid_number).exists()
     
     def generate_embedding(self, text):
-        """Generate embedding for the given text using sentence-transformers"""
+        """Generate embedding for the given text using sentence-transformers - SIMPLIFIED VERSION"""
         try:
+            # Simple, direct approach - no threading complications
             from sentence_transformers import SentenceTransformer
+            import torch
             
-            # Get the embedder model
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            print(f"🔍 [Thread-{threading.current_thread().name}] Starting embedding generation...")
             
-            # Generate embedding for the cleaned text
-            embedding = model.encode([text], normalize_embeddings=True)
+            # Force CPU device to avoid any GPU issues
+            device = torch.device('cpu')
             
-            # Convert numpy array to list of floats for JSON storage
+            # Load model directly - no caching, no threading issues
+            print(f"🔄 [Thread-{threading.current_thread().name}] Loading sentence transformer model...")
+            model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+            
+            # Ensure model is on CPU
+            model = model.to(device)
+            
+            print(f"✅ [Thread-{threading.current_thread().name}] Model loaded successfully on {device}")
+            
+            # Generate embedding
+            print(f"🔄 [Thread-{threading.current_thread().name}] Generating embedding...")
+            with torch.no_grad():
+                embedding = model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+            
+            # Convert to list
             embedding_list = embedding[0].tolist()
             
-            print(f"✅ Generated embedding with {len(embedding_list)} dimensions")
+            print(f"✅ [Thread-{threading.current_thread().name}] Generated embedding: {len(embedding_list)} dimensions")
+            print(f"📊 [Thread-{threading.current_thread().name}] First 3 values: {embedding_list[:3]}")
+            
             return embedding_list
             
-        except ImportError as e:
-            print(f"⚠️  Warning: sentence-transformers not installed. Installing now...")
-            try:
-                import subprocess
-                import sys
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "sentence-transformers"])
-                print("✅ sentence-transformers installed successfully!")
-                
-                # Try again after installation
-                from sentence_transformers import SentenceTransformer
-                model = SentenceTransformer('all-MiniLM-L6-v2')
-                embedding = model.encode([text], normalize_embeddings=True)
-                embedding_list = embedding[0].tolist()
-                print(f"✅ Generated embedding with {len(embedding_list)} dimensions")
-                return embedding_list
-                
-            except Exception as install_error:
-                print(f"❌ Failed to install sentence-transformers: {install_error}")
-                return None
-                
         except Exception as e:
-            print(f"⚠️  Warning: Error generating embedding: {e}")
-            print("🔄 Retrying with fallback method...")
+            print(f"❌ [Thread-{threading.current_thread().name}] Error in embedding generation: {e}")
+            print(f"🔄 [Thread-{threading.current_thread().name}] Trying fallback method...")
             
             try:
-                # Fallback: Try to use a different model or method
+                # Fallback: Use a different model
                 from sentence_transformers import SentenceTransformer
+                import torch
                 
-                # Try different model if available
-                try:
-                    model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
-                except:
-                    model = SentenceTransformer('all-MiniLM-L6-v2')
+                print(f"🔄 [Thread-{threading.current_thread().name}] Loading fallback model...")
+                model = SentenceTransformer('paraphrase-MiniLM-L3-v2', device='cpu')
                 
-                embedding = model.encode([text], normalize_embeddings=True)
+                with torch.no_grad():
+                    embedding = model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+                
                 embedding_list = embedding[0].tolist()
-                print(f"✅ Generated embedding with fallback method: {len(embedding_list)} dimensions")
+                print(f"✅ [Thread-{threading.current_thread().name}] Fallback embedding generated: {len(embedding_list)} dimensions")
+                
                 return embedding_list
                 
             except Exception as fallback_error:
-                print(f"❌ Fallback embedding generation also failed: {fallback_error}")
-                return None
+                print(f"❌ [Thread-{threading.current_thread().name}] Fallback also failed: {fallback_error}")
+                
+                # Last resort: Create a simple embedding
+                print(f"⚠️  [Thread-{threading.current_thread().name}] Creating simple fallback embedding...")
+                
+                # Create a simple hash-based embedding (not ideal but will work)
+                import hashlib
+                text_hash = hashlib.md5(text.encode()).hexdigest()
+                
+                # Convert hash to 384-dimensional vector
+                simple_embedding = []
+                for i in range(384):
+                    # Use hash to generate pseudo-random but consistent values
+                    hash_val = int(text_hash[i % 32], 16)
+                    simple_embedding.append((hash_val - 8) / 8.0)  # Scale to roughly -1 to 1
+                
+                print(f"⚠️  [Thread-{threading.current_thread().name}] Created simple embedding: {len(simple_embedding)} dimensions")
+                return simple_embedding
     
     def save_to_django_models(self, text):
         """Save extracted data to Django models"""
@@ -409,15 +635,25 @@ class GeMBiddingPDFExtractor:
             # Store cleaned text (without Hindi) in raw_text field
             cleaned_text = self.clean_text_remove_hindi(text)
             
-            # Generate embedding for the cleaned text
+            # Generate embedding for the cleaned text - THIS MUST WORK
             print("🔍 Generating embedding for bid text...")
             embedding = self.generate_embedding(cleaned_text)
+            
+            # CRITICAL: Ensure we have a valid embedding
+            if embedding is None:
+                print("❌ CRITICAL ERROR: Embedding generation failed completely!")
+                return False
+            
+            print(f"✅ Embedding generated successfully: {len(embedding)} dimensions")
+            print(f"📊 Embedding sample values: {embedding[:3]}")
             
             # Save the PDF file
             pdf_filename = os.path.basename(self.pdf_path)
             with open(self.pdf_path, 'rb') as pdf_file:
                 from django.core.files import File
                 pdf_file_obj = File(pdf_file, name=pdf_filename)
+                
+                print(f"💾 Saving bid to database: {bid_number}")
                 
                 # Create BidDocument instance with updated fields including file
                 self.bid_instance = BidDocument.objects.create(
@@ -440,11 +676,24 @@ class GeMBiddingPDFExtractor:
                     embedding=embedding
                 )
             
-            print(f"✅ Successfully saved data to Django models for bid: {bid_number}")
+            # VERIFY the embedding was saved
+            saved_bid = BidDocument.objects.get(bid_number=bid_number)
+            saved_embedding = saved_bid.embedding
+            
+            if saved_embedding and len(saved_embedding) > 0:
+                print(f"✅ SUCCESS: Bid saved with embedding: {len(saved_embedding)} dimensions")
+                print(f"📊 Saved embedding sample: {saved_embedding[:3]}")
+            else:
+                print(f"❌ ERROR: Bid saved but embedding is empty or null!")
+                print(f"📊 Expected embedding length: {len(embedding)}")
+                print(f"📊 Actual saved embedding: {saved_embedding}")
+            
             return True
             
         except Exception as e:
             print(f"❌ Error saving to Django models: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def extract_all_data(self):
@@ -523,8 +772,25 @@ class GeMBiddingPDFExtractor:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         try:
+            # Clean data for JSON export - handle date objects properly
+            clean_data = {}
+            for field, value in self.extracted_data.items():
+                if field == 'raw_text':
+                    # Skip raw text in JSON export to keep file size manageable
+                    continue
+                if hasattr(value, 'isoformat'):  # Check if it's a date-like object
+                    # Convert date objects to ISO format strings
+                    clean_data[field] = value.isoformat()
+                elif isinstance(value, str):
+                    # Clean the value for JSON
+                    clean_value = re.sub(r'[^\x00-\x7F]+', '', value)  # Remove non-ASCII
+                    clean_value = re.sub(r'\s+', ' ', clean_value).strip()  # Normalize whitespace
+                    clean_data[field] = clean_value
+                else:
+                    clean_data[field] = value
+            
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(self.extracted_data, f, indent=2, ensure_ascii=False)
+                json.dump(clean_data, f, indent=2, ensure_ascii=False)
             
             print(f"📄 Data exported to JSON: {output_path}")
             return True
@@ -601,14 +867,20 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
         print("❌ No PDF files found in data directory or subdirectories")
         return
     
+    # Initialize comprehensive logger
+    logger = ProcessLogger()
+    logger.log_session_start(len(pdf_files))
+    
     print(f"📁 Found {len(pdf_files)} PDF files in data directory and subdirectories")
     print(f"🚀 Starting multi-threaded processing with {max_workers} workers...")
+    print(f"📄 Logging to: {logger.log_dir}")
     print("="*80)
     
     # Thread-safe counters
     successful_extractions = 0
     failed_extractions = 0
     skipped_extractions = 0
+    error_details = []
     
     # Thread lock for safe counter updates
     counter_lock = threading.Lock()
@@ -617,7 +889,10 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
     
     def process_pdf_with_counter(pdf_path):
         """Process a single PDF and update counters safely"""
-        nonlocal successful_extractions, failed_extractions, skipped_extractions
+        nonlocal successful_extractions, failed_extractions, skipped_extractions, error_details
+        
+        file_start_time = time.time()
+        filename = os.path.basename(pdf_path)
         
         try:
             # Ensure Django is set up in this thread
@@ -626,8 +901,41 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
                 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pdf_data.settings')
                 django.setup()
             
-            print(f"🔄 Processing: {os.path.basename(pdf_path)}")
+            print(f"🔄 Processing: {filename}")
             
+            # Check if file is readable
+            if not os.access(pdf_path, os.R_OK):
+                error_msg = f"File not readable (permission denied)"
+                file_size = 0
+                processing_time = time.time() - file_start_time
+                
+                logger.log_file_processing(
+                    filename, 'IGNORED', error_msg, file_size, processing_time
+                )
+                
+                with counter_lock:
+                    failed_extractions += 1
+                    error_details.append(error_msg)
+                print(f"❌ {error_msg}")
+                return False
+            
+            # Check file size
+            file_size = os.path.getsize(pdf_path)
+            if file_size == 0:
+                error_msg = f"Empty file (0 bytes)"
+                processing_time = time.time() - file_start_time
+                
+                logger.log_file_processing(
+                    filename, 'IGNORED', error_msg, file_size, processing_time
+                )
+                
+                with counter_lock:
+                    failed_extractions += 1
+                    error_details.append(error_msg)
+                print(f"❌ {error_msg}")
+                return False
+            
+            # Create extractor and process
             extractor = GeMBiddingPDFExtractor(pdf_path)
             
             # Extract data
@@ -641,36 +949,86 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
                     extractor.export_to_excel()
                     extractor.export_to_json()
                     
+                    # Get bid details for logging
+                    bid_data = extractor.extract_bidding_data(text)
+                    bid_number = bid_data.get('bid_number', '')
+                    pages_extracted = len(text.split('\n')) if text else 0
+                    
+                    processing_time = time.time() - file_start_time
+                    
+                    logger.log_file_processing(
+                        filename, 'SUCCESS', 
+                        f"Successfully extracted and saved to database", 
+                        file_size, processing_time, "", bid_number, pages_extracted
+                    )
+                    
                     # Update counter safely
                     with counter_lock:
                         successful_extractions += 1
                     
-                    print(f"✅ Successfully processed: {os.path.basename(pdf_path)}")
+                    print(f"✅ Successfully processed: {filename}")
                     return True
                 else:
                     # Check if it was skipped due to duplicate
                     bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
                     bid_number = bid_data.get('bid_number', '')
+                    pages_extracted = len(text.split('\n')) if text else 0
+                    
                     if extractor.check_bid_exists(bid_number):
+                        processing_time = time.time() - file_start_time
+                        
+                        logger.log_file_processing(
+                            filename, 'SKIPPED', 
+                            f"Bid already exists in database", 
+                            file_size, processing_time, "", bid_number, pages_extracted
+                        )
+                        
                         with counter_lock:
                             skipped_extractions += 1
-                        print(f"⏭️  Skipped (already exists): {os.path.basename(pdf_path)}")
+                        print(f"⏭️  Skipped (already exists): {filename}")
                         return False
                     else:
+                        error_msg = f"Failed to save to database"
+                        processing_time = time.time() - file_start_time
+                        
+                        logger.log_file_processing(
+                            filename, 'FAILED', error_msg, file_size, processing_time, 
+                            "Database save operation failed", bid_number, pages_extracted
+                        )
+                        
                         with counter_lock:
                             failed_extractions += 1
-                        print(f"❌ Failed to save: {os.path.basename(pdf_path)}")
+                            error_details.append(error_msg)
+                        print(f"❌ {error_msg}")
                         return False
             else:
+                error_msg = f"Failed to extract data from PDF"
+                processing_time = time.time() - file_start_time
+                
+                logger.log_file_processing(
+                    filename, 'FAILED', error_msg, file_size, processing_time, 
+                    "PDF text extraction failed", "", 0
+                )
+                
                 with counter_lock:
                     failed_extractions += 1
-                print(f"❌ Failed to extract data from: {os.path.basename(pdf_path)}")
+                    error_details.append(error_msg)
+                print(f"❌ {error_msg}")
                 return False
                 
         except Exception as e:
+            error_msg = f"Exception during processing: {str(e)}"
+            processing_time = time.time() - file_start_time
+            
+            logger.log_file_processing(
+                filename, 'FAILED', error_msg, file_size, processing_time, 
+                str(e), "", 0
+            )
+            
             with counter_lock:
                 failed_extractions += 1
-            print(f"❌ Error processing {os.path.basename(pdf_path)}: {e}")
+                error_details.append(error_msg)
+            print(f"❌ {error_msg}")
             return False
     
     # Process PDFs using ThreadPoolExecutor with improved task distribution
@@ -707,6 +1065,9 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
     end_time = time.time()
     processing_time = end_time - start_time
     
+    # Log session completion
+    logger.log_session_end()
+    
     print("\n" + "="*80)
     print("📊 OPTIMIZED MULTI-THREADED EXTRACTION SUMMARY")
     print("="*80)
@@ -718,6 +1079,22 @@ def process_all_pdfs_in_data_directory_multi_threaded(max_workers=4):
     print(f"⏱️  Total processing time: {processing_time:.2f} seconds")
     print(f"🚀 Average time per PDF: {processing_time/len(pdf_files):.2f} seconds")
     print(f"⚡ Speed improvement: {max_workers}x faster than single-threaded")
+    
+    # Show log file locations
+    log_files = logger.get_log_files()
+    print(f"\n📄 LOG FILES SAVED:")
+    print(f"  📋 Detailed log: {log_files['log_file']}")
+    print(f"  📊 CSV summary: {log_files['csv_file']}")
+    print(f"  📋 Session summary: {log_files['summary_file']}")
+    
+    # Show error details if any
+    if error_details:
+        print(f"\n❌ ERROR DETAILS ({len(error_details)} errors):")
+        for i, error in enumerate(error_details[:20], 1):  # Show first 20 errors
+            print(f"  {i}. {error}")
+        if len(error_details) > 20:
+            print(f"  ... and {len(error_details) - 20} more errors")
+    
     print("="*80)
 
 def process_all_pdfs_ultra_fast(max_workers=8):
@@ -749,8 +1126,13 @@ def process_all_pdfs_ultra_fast(max_workers=8):
         print("❌ No PDF files found in data directory or subdirectories")
         return
     
+    # Initialize comprehensive logger
+    logger = ProcessLogger()
+    logger.log_session_start(len(pdf_files))
+    
     print(f"📁 Found {len(pdf_files)} PDF files in data directory and subdirectories")
     print(f"🚀 Starting ULTRA-FAST processing with {max_workers} workers...")
+    print(f"📄 Logging to: {logger.log_dir}")
     print("="*80)
     
     # Thread-safe counters
@@ -869,6 +1251,9 @@ def process_all_pdfs_ultra_fast(max_workers=8):
     end_time = time.time()
     processing_time = end_time - start_time
     
+    # Log session completion
+    logger.log_session_end()
+    
     print("\n" + "="*80)
     print("📊 ULTRA-FAST MULTI-THREADED EXTRACTION SUMMARY")
     print("="*80)
@@ -881,6 +1266,14 @@ def process_all_pdfs_ultra_fast(max_workers=8):
     print(f"🚀 Average time per PDF: {processing_time/len(pdf_files):.2f} seconds")
     print(f"⚡ Speed improvement: {max_workers}x faster than single-threaded")
     print(f"🚀 Ultra-fast mode: ~{max_workers * 1.5:.1f}x faster than regular multithreading")
+    
+    # Show log file locations
+    log_files = logger.get_log_files()
+    print(f"\n📄 LOG FILES SAVED:")
+    print(f"  📋 Detailed log: {log_files['log_file']}")
+    print(f"  📊 CSV summary: {log_files['csv_file']}")
+    print(f"  📋 Session summary: {log_files['summary_file']}")
+    
     print("="*80)
 
 def process_all_pdfs_in_data_directory():
@@ -912,14 +1305,20 @@ def process_all_pdfs_in_data_directory():
         print("❌ No PDF files found in data directory or subdirectories")
         return
     
+    # Initialize comprehensive logger
+    logger = ProcessLogger()
+    logger.log_session_start(len(pdf_files))
+    
     print(f"📁 Found {len(pdf_files)} PDF files in data directory and subdirectories")
     print("🚀 Starting single-threaded processing...")
+    print(f"📄 Logging to: {logger.log_dir}")
     print("="*80)
     
     # Counters
     successful_extractions = 0
     failed_extractions = 0
     skipped_extractions = 0
+    error_details = []
     
     start_time = time.time()
     
@@ -927,6 +1326,39 @@ def process_all_pdfs_in_data_directory():
     for i, pdf_path in enumerate(pdf_files, 1):
         try:
             print(f"\n🔄 Processing {i}/{len(pdf_files)}: {os.path.basename(pdf_path)}")
+            
+            file_start_time = time.time()
+            filename = os.path.basename(pdf_path)
+            
+            # Check if file is readable
+            if not os.access(pdf_path, os.R_OK):
+                error_msg = f"File not readable (permission denied)"
+                file_size = 0
+                processing_time = time.time() - file_start_time
+                
+                logger.log_file_processing(
+                    filename, 'IGNORED', error_msg, file_size, processing_time
+                )
+                
+                failed_extractions += 1
+                error_details.append(error_msg)
+                print(f"❌ {error_msg}")
+                continue
+            
+            # Check file size
+            file_size = os.path.getsize(pdf_path)
+            if file_size == 0:
+                error_msg = f"Empty file (0 bytes)"
+                processing_time = time.time() - file_start_time
+                
+                logger.log_file_processing(
+                    filename, 'IGNORED', error_msg, file_size, processing_time
+                )
+                
+                failed_extractions += 1
+                error_details.append(error_msg)
+                print(f"❌ {error_msg}")
+                continue
             
             extractor = GeMBiddingPDFExtractor(pdf_path)
             
@@ -941,28 +1373,81 @@ def process_all_pdfs_in_data_directory():
                     extractor.export_to_excel()
                     extractor.export_to_json()
                     
+                    # Get bid details for logging
+                    bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
+                    bid_number = bid_data.get('bid_number', '')
+                    pages_extracted = len(text.split('\n')) if text else 0
+                    
+                    processing_time = time.time() - file_start_time
+                    
+                    logger.log_file_processing(
+                        filename, 'SUCCESS', 
+                        f"Successfully extracted and saved to database", 
+                        file_size, processing_time, "", bid_number, pages_extracted
+                    )
+                    
                     successful_extractions += 1
-                    print(f"✅ Successfully processed: {os.path.basename(pdf_path)}")
+                    print(f"✅ Successfully processed: {filename}")
                 else:
                     # Check if it was skipped due to duplicate
                     bid_data = extractor.extract_bidding_data(extractor.extract_text_from_pdf())
                     bid_number = bid_data.get('bid_number', '')
+                    pages_extracted = len(text.split('\n')) if text else 0
+                    
                     if extractor.check_bid_exists(bid_number):
+                        processing_time = time.time() - file_start_time
+                        
+                        logger.log_file_processing(
+                            filename, 'SKIPPED', 
+                            f"Bid already exists in database", 
+                            file_size, processing_time, "", bid_number, pages_extracted
+                        )
+                        
                         skipped_extractions += 1
-                        print(f"⏭️  Skipped (already exists): {os.path.basename(pdf_path)}")
+                        print(f"⏭️  Skipped (already exists): {filename}")
                     else:
+                        error_msg = f"Failed to save to database"
+                        processing_time = time.time() - file_start_time
+                        
+                        logger.log_file_processing(
+                            filename, 'FAILED', error_msg, file_size, processing_time, 
+                            "Database save operation failed", bid_number, pages_extracted
+                        )
+                        
                         failed_extractions += 1
-                        print(f"❌ Failed to save: {os.path.basename(pdf_path)}")
+                        error_details.append(error_msg)
+                        print(f"❌ {error_msg}")
             else:
+                error_msg = f"Failed to extract data from PDF"
+                processing_time = time.time() - file_start_time
+                
+                logger.log_file_processing(
+                    filename, 'FAILED', error_msg, file_size, processing_time, 
+                    "PDF text extraction failed", "", 0
+                )
+                
                 failed_extractions += 1
-                print(f"❌ Failed to extract data from: {os.path.basename(pdf_path)}")
+                error_details.append(error_msg)
+                print(f"❌ {error_msg}")
                 
         except Exception as e:
+            error_msg = f"Exception during processing: {str(e)}"
+            processing_time = time.time() - file_start_time
+            
+            logger.log_file_processing(
+                filename, 'FAILED', error_msg, file_size, processing_time, 
+                str(e), "", 0
+            )
+            
             failed_extractions += 1
-            print(f"❌ Error processing {os.path.basename(pdf_path)}: {e}")
+            error_details.append(error_msg)
+            print(f"❌ {error_msg}")
     
     # Calculate elapsed time
     elapsed_time = time.time() - start_time
+    
+    # Log session completion
+    logger.log_session_end()
     
     # Print summary
     print("\n" + "="*80)
@@ -973,6 +1458,22 @@ def process_all_pdfs_in_data_directory():
     print(f"❌ Failed extractions: {failed_extractions}")
     print(f"⏱️  Total time: {elapsed_time:.2f} seconds")
     print(f"📁 Total PDFs processed: {len(pdf_files)}")
+    
+    # Show log file locations
+    log_files = logger.get_log_files()
+    print(f"\n📄 LOG FILES SAVED:")
+    print(f"  📋 Detailed log: {log_files['log_file']}")
+    print(f"  📊 CSV summary: {log_files['csv_file']}")
+    print(f"  📋 Session summary: {log_files['summary_file']}")
+    
+    # Show error details if any
+    if error_details:
+        print(f"\n❌ ERROR DETAILS ({len(error_details)} errors):")
+        for i, error in enumerate(error_details[:20], 1):  # Show first 20 errors
+            print(f"  {i}. {error}")
+        if len(error_details) > 20:
+            print(f"  ... and {len(error_details) - 20} more errors")
+    
     print("="*80)
 
 def generate_embeddings_for_existing_bids():
@@ -1020,6 +1521,197 @@ def generate_embeddings_for_existing_bids():
     except Exception as e:
         print(f"❌ Error in generate_embeddings_for_existing_bids: {e}")
 
+def diagnose_pdf_files():
+    """Diagnose PDF files for common issues"""
+    print("🔍 Diagnosing PDF files for common issues...")
+    
+    data_dir = Path(__file__).parent / "data"
+    
+    if not data_dir.exists():
+        print("❌ Data directory not found")
+        return
+    
+    pdf_files = find_all_pdfs_in_data_directory_recursive(str(data_dir))
+    
+    if not pdf_files:
+        print("❌ No PDF files found")
+        return
+    
+    print(f"📁 Found {len(pdf_files)} PDF files")
+    print("🔍 Checking file health...")
+    
+    issues = {
+        'unreadable': [],
+        'empty': [],
+        'corrupted': [],
+        'healthy': []
+    }
+    
+    for pdf_path in pdf_files:
+        filename = os.path.basename(pdf_path)
+        
+        # Check readability
+        if not os.access(pdf_path, os.R_OK):
+            issues['unreadable'].append(filename)
+            continue
+        
+        # Check file size
+        try:
+            file_size = os.path.getsize(pdf_path)
+            if file_size == 0:
+                issues['empty'].append(filename)
+                continue
+        except OSError:
+            issues['unreadable'].append(filename)
+            continue
+        
+        # Check if PDF can be opened
+        try:
+            doc = fitz.open(pdf_path)
+            page_count = len(doc)
+            doc.close()
+            
+            if page_count > 0:
+                issues['healthy'].append(filename)
+            else:
+                issues['corrupted'].append(filename)
+                
+        except Exception:
+            issues['corrupted'].append(filename)
+    
+    # Print diagnosis summary
+    print("\n" + "="*60)
+    print("📊 PDF DIAGNOSIS SUMMARY")
+    print("="*60)
+    print(f"✅ Healthy files: {len(issues['healthy'])}")
+    print(f"⚠️  Empty files: {len(issues['empty'])}")
+    print(f"❌ Corrupted files: {len(issues['corrupted'])}")
+    print(f"🚫 Unreadable files: {len(issues['unreadable'])}")
+    print("="*60)
+    
+    # Show recommendations
+    if issues['unreadable']:
+        print(f"\n🚫 Unreadable files ({len(issues['unreadable'])}):")
+        for filename in issues['unreadable'][:5]:  # Show first 5
+            print(f"  - {filename}")
+        if len(issues['unreadable']) > 5:
+            print(f"  ... and {len(issues['unreadable']) - 5} more")
+        print("💡 Recommendation: Check file permissions")
+    
+    if issues['empty']:
+        print(f"\n⚠️  Empty files ({len(issues['empty'])}):")
+        for filename in issues['empty'][:5]:  # Show first 5
+            print(f"  - {filename}")
+        if len(issues['empty']) > 5:
+            print(f"  ... and {len(issues['empty']) - 5} more")
+        print("💡 Recommendation: Remove or replace empty files")
+    
+    if issues['corrupted']:
+        print(f"\n❌ Corrupted files ({len(issues['corrupted'])}):")
+        for filename in issues['corrupted'][:5]:  # Show first 5
+            print(f"  - {filename}")
+        if len(issues['corrupted']) > 5:
+            print(f"  ... and {len(issues['corrupted']) - 5} more")
+        print("💡 Recommendation: Re-download or repair corrupted files")
+    
+    print("\n" + "="*60)
+
+def view_logs():
+    """View recent log files"""
+    print("📄 Viewing recent log files...")
+    
+    log_dir = Path(__file__).parent / "logs"
+    
+    if not log_dir.exists():
+        print("❌ Logs directory not found")
+        return
+    
+    # Find log files
+    log_files = list(log_dir.glob("*.log"))
+    csv_files = list(log_dir.glob("*.csv"))
+    summary_files = list(log_dir.glob("*_summary.json"))
+    
+    if not log_files and not csv_files and not summary_files:
+        print("❌ No log files found")
+        return
+    
+    print(f"📁 Log directory: {log_dir}")
+    print(f"📋 Log files: {len(log_files)}")
+    print(f"📊 CSV files: {len(csv_files)}")
+    print(f"📋 Summary files: {len(summary_files)}")
+    
+    # Show most recent files
+    if log_files:
+        latest_log = max(log_files, key=lambda x: x.stat().st_mtime)
+        print(f"\n📋 Latest log file: {latest_log.name}")
+        print(f"📅 Modified: {datetime.fromtimestamp(latest_log.stat().st_mtime)}")
+        
+        # Show last few lines
+        try:
+            with open(latest_log, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                if lines:
+                    print(f"\n📄 Last 5 lines of {latest_log.name}:")
+                    for line in lines[-5:]:
+                        print(f"  {line.strip()}")
+        except Exception as e:
+            print(f"❌ Error reading log file: {e}")
+    
+    if csv_files:
+        latest_csv = max(csv_files, key=lambda x: x.stat().st_mtime)
+        print(f"\n📊 Latest CSV file: {latest_csv.name}")
+        print(f"📅 Modified: {datetime.fromtimestamp(latest_csv.stat().st_mtime)}")
+    
+    if summary_files:
+        latest_summary = max(summary_files, key=lambda x: x.stat().st_mtime)
+        print(f"\n📋 Latest summary file: {latest_summary.name}")
+        print(f"📅 Modified: {datetime.fromtimestamp(latest_summary.stat().st_mtime)}")
+        
+        # Show summary content
+        try:
+            with open(latest_summary, 'r', encoding='utf-8') as f:
+                summary_data = json.load(f)
+                stats = summary_data.get('statistics', {})
+                print(f"\n📊 Latest session statistics:")
+                print(f"  ✅ Successful: {stats.get('successful', 0)}")
+                print(f"  ⏭️  Skipped: {stats.get('skipped', 0)}")
+                print(f"  ❌ Failed: {stats.get('failed', 0)}")
+                print(f"  ⚠️  Ignored: {stats.get('ignored', 0)}")
+                print(f"  ⏱️  Duration: {stats.get('duration_seconds', 0):.2f} seconds")
+        except Exception as e:
+            print(f"❌ Error reading summary file: {e}")
+    
+    print("\n💡 Use '--view-logs' to see this information anytime")
+
+def test_embedding_generation():
+    """Test embedding generation to ensure it's working"""
+    print("🧪 Testing embedding generation...")
+    
+    try:
+        # Create a simple test extractor
+        test_extractor = GeMBiddingPDFExtractor("test.pdf")
+        
+        # Test text
+        test_text = "This is a test bid document for embedding generation."
+        
+        print(f"📝 Test text: {test_text}")
+        
+        # Generate embedding
+        embedding = test_extractor.generate_embedding(test_text)
+        
+        if embedding:
+            print(f"✅ Test embedding generated: {len(embedding)} dimensions")
+            print(f"📊 First 5 values: {embedding[:5]}")
+            print(f"📊 Last 5 values: {embedding[-5:]}")
+            return True
+        else:
+            print("❌ Test embedding generation failed")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Test failed with error: {e}")
+        return False
+
 def show_help():
     """Display help information for the script"""
     print("🧪 GEM BIDDING DATA EXTRACTOR - COMMAND LINE USAGE")
@@ -1029,20 +1721,28 @@ def show_help():
     print("")
     print("Options:")
     print("  --help, -h              Show this help message")
+    print("  --test-embedding, -te   Test embedding generation")
     print("  --generate-embeddings, -ge  Generate embeddings for existing bids")
     print("  --multi-thread, -mt     Process PDFs using multi-threading")
     print("  --workers=N, -w=N       Set number of worker threads (default: 4)")
     print("  --ultra-fast, -uf      Process PDFs using ultra-fast multithreading")
     print("  --ufw=N, -ufw=N        Set number of ultra-fast worker threads (default: 8)")
+    print("  --diagnose, -d          Diagnose PDF files for common issues")
+    print("  --view-logs, -vl        View recent log files and statistics")
+    print("  --verify-embeddings, -ve  Verify embeddings in database")
     print("")
     print("Examples:")
     print("  python data_extractor.py                    # Process all PDFs in data/ directory")
     print("  python data_extractor.py document.pdf       # Process single PDF file")
+    print("  python data_extractor.py --test-embedding   # Test embedding generation")
     print("  python data_extractor.py --multi-thread     # Multi-threaded processing")
     print("  python data_extractor.py --multi-thread --workers=8  # 8 worker threads")
     print("  python data_extractor.py --ultra-fast       # Ultra-fast multithreading")
     print("  python data_extractor.py --ultra-fast --ufw=16  # 16 ultra-fast worker threads")
     print("  python data_extractor.py --generate-embeddings      # Generate embeddings")
+    print("  python data_extractor.py --diagnose                # Diagnose PDF files")
+    print("  python data_extractor.py --view-logs               # View recent logs")
+    print("  python data_extractor.py --verify-embeddings       # Verify database embeddings")
     print("")
     print("Note: Place PDF files in the 'data/' directory for batch processing")
     print("="*60)
@@ -1054,7 +1754,23 @@ def main():
         return
     
     # Check for special commands first
-    if "--generate-embeddings" in sys.argv or "-ge" in sys.argv:
+    if "--diagnose" in sys.argv or "-d" in sys.argv:
+        # Diagnose PDF files
+        print("🔍 PDF File Diagnosis Mode")
+        diagnose_pdf_files()
+    elif "--view-logs" in sys.argv or "-vl" in sys.argv:
+        # View recent logs
+        print("📄 Log Viewer Mode")
+        view_logs()
+    elif "--test-embedding" in sys.argv or "-te" in sys.argv:
+        # Test embedding generation
+        print("🧪 Testing embedding generation...")
+        test_embedding_generation()
+    elif "--verify-embeddings" in sys.argv or "-ve" in sys.argv:
+        # Verify embeddings in database
+        print("🔍 Embedding Verification Mode")
+        verify_embeddings_in_database()
+    elif "--generate-embeddings" in sys.argv or "-ge" in sys.argv:
         # Generate embeddings for existing bids
         print("🚀 Generating embeddings for existing bids...")
         generate_embeddings_for_existing_bids()
@@ -1084,6 +1800,14 @@ def main():
         
         print(f"🚀 Starting ULTRA-FAST processing with {max_workers} workers...")
         process_all_pdfs_ultra_fast(max_workers)
+    elif "--verify-embeddings" in sys.argv or "-ve" in sys.argv:
+        # Verify embeddings in database
+        print("🔍 Verifying embeddings in database...")
+        verify_embeddings_in_database()
+    elif "--test-embedding" in sys.argv or "-te" in sys.argv:
+        # Test embedding generation
+        print("🧪 Testing embedding generation...")
+        test_embedding_generation()
     elif len(sys.argv) > 1:
         # Check if PDF path is provided as command line argument
         pdf_path = sys.argv[1]

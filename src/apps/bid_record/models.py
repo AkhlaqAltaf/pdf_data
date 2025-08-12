@@ -41,19 +41,32 @@ class BidDocument(models.Model):
     def _compute_embedding(cls, text: str) -> Optional[List[float]]:
         if not text:
             return None
-        model = cls._get_embedder()
-        if model is None:
-            return None
+        
         try:
+            model = cls._get_embedder()
+            if model is None:
+                print("❌ Could not load sentence transformer model")
+                return None
+            
+            print(f"🔄 Encoding text with {len(text)} characters...")
             vec = model.encode([text], normalize_embeddings=True)
-            return vec[0].tolist()  # type: ignore[attr-defined]
-        except Exception:
+            embedding_list = vec[0].tolist()
+            print(f"✅ Embedding computed successfully: {len(embedding_list)} dimensions")
+            return embedding_list
+            
+        except Exception as e:
+            print(f"❌ Error computing embedding: {e}")
             return None
 
     def save(self, *args, **kwargs):
-        # Compute embedding if raw_text is present
-        if self.raw_text:
+        # Only compute embedding if raw_text is present AND embedding is not already set
+        if self.raw_text and not self.embedding:
+            print(f"🔄 Computing embedding for bid: {self.bid_number}")
             self.embedding = self._compute_embedding(self.raw_text)
+            if self.embedding:
+                print(f"✅ Embedding computed: {len(self.embedding)} dimensions")
+            else:
+                print(f"❌ Failed to compute embedding for bid: {self.bid_number}")
 
         # Check if bid_number exists in DB (and not the current instance)
         if self.bid_number:
@@ -64,7 +77,9 @@ class BidDocument(models.Model):
                     for field in self._meta.fields:
                         if field.name != "id":
                             setattr(existing, field.name, getattr(self, field.name))
-                    existing.embedding = self.embedding
+                    # Preserve the embedding we computed
+                    if self.embedding:
+                        existing.embedding = self.embedding
                     existing.save()
                     # Cancel creation of a new record by not calling super().save() here
                     return
