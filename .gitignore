@@ -177,3 +177,9 @@ logs/
 .env.development
 .env.test
 .env.production
+
+# Extracted data directories
+extracted_data/
+src/apps/*/extracted_data/
+src/apps/bid_record/extracted_data/
+src/apps/cont_record/extracted_data/
