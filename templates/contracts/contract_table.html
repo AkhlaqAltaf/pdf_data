@@ -6,376 +6,470 @@
 
 {% block content %}
 <style>
-    /* Compact UI Enhancements */
+    /* Full-width layout with margins from base.html */
     #table-view {
-        padding: 0 15px;
+        padding: 0;
+        width: 100%;
+        max-width: 100%;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
     }
 
+    /* Enhanced page title */
     .page-title {
-        margin: 1.5rem 0 1rem;
-        font-size: 1.8rem;
+        margin: 3rem 0 3rem;
+        font-size: 3rem;
+        text-align: center;
+        color: #00d4ff;
+        text-shadow: 0 0 30px rgba(0, 212, 255, 0.8);
+        font-weight: 800;
+        letter-spacing: 3px;
+        background: linear-gradient(45deg, #00d4ff, #00ff9d);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
 
+    /* Unified card container for filters and table */
+    .unified-card {
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 20px;
+        border: 3px solid rgba(0, 212, 255, 0.4); /* Restored large container border */
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+        margin: 2rem 0;
+        padding: 2rem;
+        width: 100%;
+    }
+
+    /* Improved filter form - now part of unified card */
     .filter-form {
-        padding: 0.8rem;
-        gap: 0.6rem;
-        margin-bottom: 1rem;
+        padding: 1.5rem;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 15px;
+        border: none; /* Removed filter form border */
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
     }
 
     .filter-input,
     .filter-btn {
-        padding: 0.5rem 0.8rem;
-        font-size: 0.9rem;
+        padding: 0.8rem 1.2rem;
+        font-size: 1rem;
+        border-radius: 10px;
+        border: 2px solid rgba(0, 212, 255, 0.4);
+        transition: all 0.3s ease;
+        background: rgba(0, 0, 0, 0.3);
+        color: #ffffff;
+    }
+
+    .filter-input:focus {
+        border-color: #00ff9d;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.5);
+        transform: scale(1.02);
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    .filter-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 212, 255, 0.5);
+        background: linear-gradient(45deg, #00d4ff, #00ff9d);
+        color: #000;
     }
 
     .export-btns {
-        gap: 0.7rem;
+        gap: 1rem;
     }
 
     .action-btn {
-        padding: 0.5rem 0.8rem;
-        font-size: 0.85rem;
+        padding: 0.8rem 1.5rem;
+        font-size: 1rem;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 212, 255, 0.5);
+    }
+
+    /* Reduced table styling - smaller and more compact */
+    .contracts-table {
+        width: 100%;
+        min-width: 1600px; /* Reduced from 2000px */
+        border-radius: 15px;
+        overflow: visible;
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+        margin: 0;
+        border: 2px solid rgba(0, 212, 255, 0.3);
+        background: rgba(0, 0, 0, 0.3);
+        table-layout: auto;
     }
 
     .contracts-table th,
     .contracts-table td {
-        padding: 0.6rem 0.8rem;
-        font-size: 0.85rem;
-        max-width: 200px;
+        padding: 1rem 1.2rem; /* Reduced from 1.5rem 1.8rem */
+        font-size: 0.95rem; /* Reduced from 1.1rem */
+        max-width: none;
+        vertical-align: middle;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        line-height: 1.4;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        word-wrap: break-word;
     }
 
-    .btn-sm {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.8rem;
-    }
-
-    .collapse-toggle {
-        padding: 0.3rem 0.5rem;
-        font-size: 0.9rem;
-    }
-
-    .pagination {
-        margin: 1rem 0;
-    }
-
-    .page-link {
-        padding: 0.3rem 0.6rem;
-    }
-
-    .section-header th {
-        padding: 0.5rem;
-        font-size: 0.95rem;
-    }
-
-    /* Color Scheme from Base */
     .contracts-table th {
-        background: rgba(0, 0, 0, 0.3);
-        color: var(--accent-neon);
-        border-bottom: 2px solid var(--accent-blue);
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5));
+        color: #00ff9d;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-size: 1.1rem; /* Reduced from 1.3rem */
+        text-align: center;
+        border-bottom: 3px solid #00d4ff;
+        text-shadow: 0 0 15px rgba(0, 255, 157, 0.6);
+        padding: 1.5rem 1.2rem; /* Reduced from 2rem 1.5rem */
     }
 
     .contracts-table td {
-        background: rgba(0, 212, 255, 0.05);
-
-        color: var(--text-secondary);
-        border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+        background: rgba(0, 0, 0, 0.4);
+        color: #ffffff;
+        font-size: 0.95rem;
+        line-height: 1.4;
+        transition: all 0.3s ease;
+        font-weight: 500;
     }
 
     .contracts-table tr:hover td {
-        background: rgba(0, 212, 255, 0.05);
-        color: var(--text-primary);
+        background: rgba(0, 212, 255, 0.12);
+        color: #00ff9d;
+        transform: scale(1.01);
+        box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
     }
 
-    .filter-input {
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(0, 212, 255, 0.2);
-        color: var(--text-primary);
+    /* Enhanced section headers - smaller */
+    .section-header th {
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.6));
+        font-weight: 800;
+        text-align: center;
+        padding: 1.8rem 0.8rem; /* Reduced from 2.5rem 1rem */
+        font-size: 1.3rem; /* Reduced from 1.5rem */
+        color: #00d4ff;
+        text-shadow: 0 0 20px rgba(0, 212, 255, 0.7);
+        border-bottom: 3px solid #00ff9d;
+        letter-spacing: 2px;
     }
 
-    .filter-btn,
-    .action-btn {
-        background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon));
-        color: var(--primary-dark);
-    }
-
-    .export-btn {
-        background: linear-gradient(135deg, var(--accent-neon), #00cc66);
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, var(--accent-blue), #0077ff);
-        border: none;
-    }
-
-    /* User-Friendly Table Improvements */
-    .contracts-table {
+    /* Better button styling - smaller */
+    .btn-sm {
+        padding: 0.6rem 1.2rem; /* Reduced from 0.8rem 1.5rem */
+        font-size: 0.9rem; /* Reduced from 1rem */
         border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .contracts-table th {
         font-weight: 600;
+        transition: all 0.3s ease;
+        margin: 0.2rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        border-bottom: 2px solid var(--accent-blue);
-    }
-
-    .contracts-table td {
-        vertical-align: middle;
-        transition: all 0.2s ease;
-    }
-
-    .contracts-table tr:hover td {
-        background: rgba(0, 212, 255, 0.08);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 212, 255, 0.1);
-    }
-
-    .section-header th {
-        background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3));
-        font-weight: 700;
-        text-align: center;
-        padding: 1rem 0.5rem;
-    }
-
-    /* Better button styling */
-    .btn-sm {
-        border-radius: 6px;
-        font-weight: 500;
-        transition: all 0.2s ease;
     }
 
     .btn-sm:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
     }
 
-    /* Improved text truncation */
-    .contracts-table td[title] {
-        cursor: help;
-    }
-
-    /* Better spacing for action buttons */
-    .contracts-table td:last-child {
-        text-align: center;
-        min-width: 100px;
-    }
-
-    /* AI Search Styles */
-    .status-message {
-        padding: 0.75rem;
-        border-radius: 6px;
-        font-weight: 500;
-        margin-bottom: 1rem;
-    }
-
-    .status-success {
-        background: rgba(0, 255, 0, 0.1);
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        color: #00ff00;
-    }
-
-    .status-error {
-        background: rgba(255, 0, 0, 0.1);
-        border: 1px solid rgba(255, 0, 0, 0.3);
-        color: #ff6666;
-    }
-
-    .status-info {
-        background: rgba(0, 212, 255, 0.1);
-        border: 1px solid rgba(0, 212, 255, 0.3);
-        color: var(--accent-blue);
-    }
-
-    .results-section {
-        margin-top: 1rem;
-    }
-
-    .results-section .card {
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(0, 212, 255, 0.2);
-        margin-bottom: 0.5rem;
-    }
-
-    .results-section .card-body {
-        padding: 1rem;
-        color: var(--text-primary);
-    }
-
-    .results-section .card-body div {
-        margin-bottom: 0.5rem;
-    }
-
-    .results-section .card-body div:last-child {
-        margin-bottom: 0;
-    }
-
-    .results-section .btn-outline-info {
-        border-color: var(--accent-blue);
-        color: var(--accent-blue);
-    }
-
-    .results-section .btn-outline-info:hover {
-        background: var(--accent-blue);
-        color: var(--primary-dark);
-    }
-
-    /* Loading spinner */
-    .spinner-border-sm {
-        width: 1rem;
-        height: 1rem;
-    }
-
-    /* AI Search Results */
-    .ai-result-item {
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(0, 212, 255, 0.2);
-        border-radius: 6px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
-        transition: all 0.2s ease;
-    }
-
-    .ai-result-item:hover {
-        background: rgba(0, 0, 0, 0.3);
-        border-color: rgba(0, 212, 255, 0.4);
-    }
-
-    .ai-result-score {
-        background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon));
-        color: var(--primary-dark);
-        padding: 0.2rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.8rem;
+    .collapse-toggle {
+        padding: 0.6rem 1.2rem;
+        font-size: 1rem;
+        border-radius: 8px;
         font-weight: 600;
     }
 
-    .ai-summary {
-        background: rgba(0, 212, 255, 0.1);
-        border-left: 4px solid var(--accent-blue);
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0 6px 6px 0;
+    /* Enhanced pagination - smaller */
+    .pagination {
+        margin: 2rem 0;
+        justify-content: center;
     }
 
-    /* New styles for AI relevant rows */
-    .ai-relevant-row {
-        background-color: rgba(0, 212, 255, 0.08) !important; /* Slightly different background for AI relevant */
-        border-left: 4px solid var(--accent-neon) !important; /* Highlight color for AI relevant */
-        position: relative;
-    }
-
-    .ai-relevant-row:hover {
-        background-color: rgba(0, 212, 255, 0.12) !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0, 212, 255, 0.2);
-    }
-
-    .ai-relevant-row td {
-        border-color: rgba(0, 212, 255, 0.2);
-    }
-
-    /* AI Status badge styling */
-    .badge.bg-success {
-        background: linear-gradient(135deg, var(--accent-neon), #00cc66) !important;
-        color: var(--primary-dark) !important;
+    .page-link {
+        padding: 0.8rem 1.2rem; /* Reduced from 1rem 1.5rem */
+        font-size: 1rem;
+        border-radius: 8px;
+        margin: 0 0.2rem;
+        background: rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(0, 212, 255, 0.4);
+        color: #00d4ff;
+        transition: all 0.3s ease;
         font-weight: 600;
-        padding: 0.4rem 0.6rem;
-        border-radius: 6px;
     }
 
-    .badge.bg-secondary {
-        background: rgba(108, 117, 125, 0.3) !important;
-        color: var(--text-secondary) !important;
-        border: 1px solid rgba(108, 117, 125, 0.5);
+    .page-link:hover {
+        background: #00d4ff;
+        color: #000;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(0, 212, 255, 0.5);
     }
 
-    /* Search help text styling */
+    /* Enhanced search results counter - smaller */
+    .alert-info {
+        border-radius: 15px;
+        font-size: 1rem;
+        padding: 1.5rem; /* Reduced from 2rem */
+        background: rgba(0, 212, 255, 0.12);
+        border: 2px solid rgba(0, 212, 255, 0.3);
+        color: #00d4ff;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        margin: 0 0 1.5rem 0;
+    }
+
+    .alert-info .btn-outline-info {
+        border-color: #00d4ff;
+        color: #00d4ff;
+        font-size: 0.9rem;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .alert-info .btn-outline-info:hover {
+        background: #00d4ff;
+        color: #000;
+        transform: translateY(-2px);
+    }
+
+    /* Enhanced search help text - smaller */
     .search-help-text {
-        color: var(--text-secondary);
-        font-size: 0.8rem;
-        opacity: 0.8;
-        transition: opacity 0.2s ease;
+        color: #00d4ff;
+        font-size: 0.9rem;
+        opacity: 0.9;
+        transition: opacity 0.3s ease;
+        text-align: center;
+        margin: 1rem 0;
+        padding: 0.8rem;
+        background: rgba(0, 212, 255, 0.06);
+        border-radius: 10px;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        font-weight: 500;
     }
 
     .search-help-text:hover {
         opacity: 1;
+        background: rgba(0, 212, 255, 0.12);
     }
 
     .search-help-text i {
-        color: var(--accent-blue);
+        color: #00ff9d;
+        margin-right: 0.5rem;
     }
 
-    /* Search highlighting styles */
+    /* Enhanced table responsiveness - smaller */
+    .table-responsive {
+        border-radius: 15px;
+        overflow-x: auto;
+        overflow-y: visible;
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+        margin: 0;
+        max-width: 100%;
+        scrollbar-width: thin;
+        scrollbar-color: #00d4ff #1a1a2e;
+        padding-bottom: 8px;
+    }
+
+    /* Enhanced scrollbar for better table navigation */
+    .table-responsive::-webkit-scrollbar {
+        width: 14px;
+        height: 14px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: linear-gradient(45deg, #00d4ff, #00ff9d);
+        border-radius: 8px;
+        border: 2px solid rgba(0, 0, 0, 0.3);
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(45deg, #00ff9d, #00d4ff);
+    }
+
+    .table-responsive::-webkit-scrollbar-corner {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    /* Column width optimization for better field visibility - remove fixed widths */
+    .contracts-table th,
+    .contracts-table td {
+        min-width: auto;
+        max-width: none;
+    }
+
+    /* Specific column adjustments for better readability */
+    .contracts-table th:nth-child(1), /* Contract No */
+    .contracts-table td:nth-child(1) {
+        min-width: 160px;
+    }
+
+    .contracts-table th:nth-child(4), /* Buyer Address */
+    .contracts-table td:nth-child(4),
+    .contracts-table th:nth-child(5), /* Paying Address */
+    .contracts-table td:nth-child(5),
+    .contracts-table th:nth-child(6), /* Seller Address */
+    .contracts-table td:nth-child(6) {
+        min-width: 220px;
+    }
+
+    .contracts-table th:nth-child(15), /* Email */
+    .contracts-table td:nth-child(15) {
+        min-width: 220px;
+    }
+
+    .contracts-table th:nth-child(20), /* Actions */
+    .contracts-table td:nth-child(20) {
+        min-width: 200px;
+    }
+
+    /* Responsive improvements */
+    @media (max-width: 1400px) {
+        .contracts-table {
+            min-width: 1400px;
+        }
+        
+        .contracts-table th,
+        .contracts-table td {
+            padding: 0.9rem 1.1rem;
+            font-size: 0.9rem;
+        }
+        
+        .page-title {
+            font-size: 2.5rem;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .contracts-table {
+            min-width: 1200px;
+        }
+        
+        .contracts-table th,
+        .contracts-table td {
+            padding: 0.8rem 1rem;
+            font-size: 0.85rem;
+        }
+        
+        .page-title {
+            font-size: 2.2rem;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .contracts-table {
+            min-width: 1000px;
+        }
+        
+        .contracts-table th,
+        .contracts-table td {
+            padding: 0.7rem 0.9rem;
+            font-size: 0.8rem;
+        }
+        
+        .page-title {
+            font-size: 2rem;
+        }
+        
+        .filter-form {
+            padding: 1.2rem;
+            margin: 0 0 1.5rem 0;
+        }
+        
+        .contracts-table {
+            margin: 1.5rem 0;
+        }
+        
+        .table-responsive {
+            margin: 0;
+        }
+        
+        .alert-info {
+            margin: 0 0 1.2rem 0;
+        }
+        
+        .unified-card {
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+        }
+    }
+
+    /* Additional enhancements for better visibility */
+    .contracts-table tbody tr:nth-child(even) {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    .contracts-table tbody tr:nth-child(odd) {
+        background: rgba(0, 0, 0, 0.4);
+    }
+
+    .contracts-table tbody tr:hover {
+        background: rgba(0, 212, 255, 0.08) !important;
+    }
+
+    /* Enhanced AI relevant rows */
+    .ai-relevant-row {
+        background-color: rgba(0, 212, 255, 0.1) !important;
+        border-left: 6px solid #00ff9d !important;
+        position: relative;
+    }
+
+    .ai-relevant-row:hover {
+        background-color: rgba(0, 212, 255, 0.15) !important;
+        transform: scale(1.02);
+        box-shadow: 0 8px 25px rgba(0, 212, 255, 0.3);
+    }
+
+    .ai-relevant-row td {
+        border-color: rgba(0, 212, 255, 0.3);
+    }
+
+    /* Enhanced search highlighting */
     .search-highlight {
-        background: rgba(0, 212, 255, 0.05) !important;
-        border-left: 3px solid var(--accent-neon) !important;
+        background: rgba(0, 212, 255, 0.1) !important;
+        border-left: 6px solid #00ff9d !important;
     }
 
     .search-highlight:hover {
-        background: rgba(0, 212, 255, 0.08) !important;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 212, 255, 0.15);
+        background: rgba(0, 212, 255, 0.15) !important;
+        transform: scale(1.01);
+        box-shadow: 0 6px 20px rgba(0, 212, 255, 0.3);
     }
 
     .search-highlight td {
-        border-color: rgba(0, 212, 255, 0.2) !important;
+        border-color: rgba(0, 212, 255, 0.3) !important;
     }
 
-    /* Search results counter styling */
-    .alert-info {
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .alert-info .btn-outline-info {
-        border-color: var(--accent-blue);
-        color: var(--accent-blue);
-        font-size: 0.8rem;
-        padding: 0.25rem 0.5rem;
-    }
-
-    .alert-info .btn-outline-info:hover {
-        background: var(--accent-blue);
-        color: var(--primary-dark);
+    /* Enhanced mark styling for search terms */
+    mark {
+        background: rgba(0, 212, 255, 0.4) !important;
+        color: #00ff9d !important;
+        padding: 0.2rem 0.4rem !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 3px 10px rgba(0, 212, 255, 0.3) !important;
     }
 </style>
 
 <div id="table-view">
-    <h1 class="page-title">CONTRACTS DATABASE</h1>
+    <!-- <h1 class="page-title">CONTRACTS DATABASE</h1> -->
 
-    <!-- AI Semantic Search Section -->
-    <!-- <div class="card mb-3" style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(0, 212, 255, 0.2);">
-        <div class="card-header" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon)); color: var(--primary-dark); font-weight: 600;">
-            <i class="fas fa-robot me-2"></i>AI Semantic Search
-        </div>
-        <div class="card-body"> -->
-            <!-- <div class="input-group mb-3">
-                <input id="aiQuery" type="text" class="form-control filter-input" placeholder="e.g. contracts in March 2024 about laptops, GSTIN 1234, buyer email..." value="">
-                <button id="aiSearchBtn" class="btn btn-primary filter-btn">
-                    <i class="fas fa-search me-1"></i>AI Search
-                </button>
-                <button id="clearAiFilterBtn" class="btn btn-outline-secondary" style="display: none;">
-                    <i class="fas fa-times me-1"></i>Clear Filter
-                </button>
-            </div>
-            <div id="aiSummary" class="status-message" style="display:none; margin-bottom: 1rem;"></div>
-            <div id="aiResults" class="results-section" style="display: none;"></div> -->
-            
-            <!-- AI Filter Status -->
-            <!-- {% if ai_filter %}
-            <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--accent-blue);">
-                <i class="fas fa-filter me-2"></i>
-                <strong>AI Filter Active:</strong> Showing only AI-relevant contracts. 
-                <button class="btn btn-sm btn-outline-info ms-2" onclick="clearAiFilter()">
-                    <i class="fas fa-times me-1"></i>Clear AI Filter
-                </button>
-            </div>
-            {% endif %} -->
-        <!-- </div>
-    </div> -->
-
+    <!-- Unified Card Container -->
+    <div class="unified-card">
     <form class="filter-form d-flex flex-wrap align-items-center" method="get">
         <input type="text" name="search" value="{{ search_query }}" class="filter-input me-2 mb-2"
             placeholder="Search contracts, addresses, designation, zone, organisation, department, ministry, contract no, date...">
@@ -451,12 +545,7 @@
     <div class="table-responsive">
         <table class="contracts-table table table-bordered table-striped">
             <thead>
-                <tr class="section-header">
-                    <th colspan="6">Basic Info</th>
-                    <th colspan="4">Organisation</th>
-                    <th colspan="4">Buyer</th>
-                    <th colspan="1">Actions</th>
-                </tr>
+              
                 <tr>
                     <!-- Basic Info -->
                     <th>Contract No</th>
@@ -642,6 +731,7 @@
             </div>
         </div>
     </div>
+    </div> <!-- Close unified-card -->
 </div>
 {% endblock %}
 
