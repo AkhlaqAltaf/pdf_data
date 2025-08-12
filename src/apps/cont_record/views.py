@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import transaction, connection
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Case, When
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -31,12 +31,25 @@ from ...utils.save_helper import extract_from_tables, parse_int, parse_decimal, 
     extract_phone, parse_date
 from ...utils.table_helper import safe_decimal_from_raw, safe_int_from_raw
 
+# AI/ML imports
 try:
     from sentence_transformers import SentenceTransformer
     import numpy as np
 except Exception:
     SentenceTransformer = None
     np = None
+
+try:
+    from transformers import pipeline
+except Exception:
+    pipeline = None
+
+try:
+    from summa import keywords
+    from summa.summarizer import summarize
+except Exception:
+    keywords = None
+    summarize = None
 
 _EMBEDDER = None
 
@@ -158,6 +171,10 @@ class ContractTableView(View):
         ministry_filter = request.GET.get("ministry", "").strip()
         date_from = request.GET.get("date_from", "").strip()
         date_to = request.GET.get("date_to", "").strip()
+        
+        # AI filter parameters
+        ai_filter = request.GET.get("ai_filter", "").strip()
+        ai_contracts = request.GET.get("ai_contracts", "").strip()
 
         # Base queryset with prefetching
         contracts_qs = Contract.objects.select_related(
@@ -192,6 +209,16 @@ class ContractTableView(View):
                 Q(buyer__email__icontains=search_query) |
                 Q(products__product_name__icontains=search_query)
             ).distinct()
+        
+        # Apply AI filter if present
+        if ai_filter and ai_contracts:
+            ai_contract_list = [c.strip() for c in ai_contracts.split(',') if c.strip()]
+            if ai_contract_list:
+                # Filter to only show AI-relevant contracts
+                contracts_qs = contracts_qs.filter(contract_no__in=ai_contract_list)
+                # Reorder to match AI relevance order
+                preserved = Case(*[When(contract_no=contract_no, then=pos) for pos, contract_no in enumerate(ai_contract_list)])
+                contracts_qs = contracts_qs.annotate(ai_order=preserved).order_by('ai_order')
 
         # Build comprehensive data structure
         contract_data = []
@@ -230,6 +257,16 @@ class ContractTableView(View):
 
             # Collect terms
             terms = [term.clause_text for term in contract.terms.all()]
+
+            # Check if this contract is AI-relevant
+            is_ai_relevant = False
+            ai_score = None
+            if ai_filter and ai_contracts:
+                ai_contract_list = [c.strip() for c in ai_contracts.split(',') if c.strip()]
+                if contract.contract_no in ai_contract_list:
+                    is_ai_relevant = True
+                    # Get AI score if available (you can enhance this later)
+                    ai_score = "AI Relevant"
 
             contract_data.append({
                 # Contract fields
@@ -308,6 +345,10 @@ class ContractTableView(View):
                 # Calculated values
                 "total_value": total_value,
                 "total_quantity": total_qty,
+                
+                # AI relevance
+                "is_ai_relevant": is_ai_relevant,
+                "ai_score": ai_score,
             })
 
         # Export handling
@@ -336,6 +377,8 @@ class ContractTableView(View):
             "org_options": org_options,
             "dept_options": dept_options,
             "ministry_options": ministry_options,
+            "ai_filter": ai_filter,
+            "ai_contracts": ai_contracts,
         })
     def export_data(self, rows, file_type):
         df = pd.DataFrame(rows)
@@ -712,46 +755,45 @@ class SemanticSearchView(View):
         print("TEXT : ",text)
         """Generate a clean, query-focused summary using AI transformers"""
         # First, try to answer the query directly
-        try:
-            # Initialize QA pipeline
-            qa_pipeline = pipeline(
-                "question-answering",
-                model="deepset/roberta-base-squad2",
-                tokenizer="deepset/roberta-base-squad2"
-            )
+        if pipeline is not None:
+            try:
+                # Initialize QA pipeline
+                qa_pipeline = pipeline(
+                    "question-answering",
+                    model="deepset/roberta-base-squad2",
+                    tokenizer="deepset/roberta-base-squad2"
+                )
 
-            # Try to extract a direct answer
-            answer = qa_pipeline(question=query, context=text[:3000])  # Limit context
-            if answer['score'] > 0.1:  # Minimum confidence threshold
-                return answer['answer']
-        except Exception:
-            pass
+                # Try to extract a direct answer
+                answer = qa_pipeline(question=query, context=text[:3000])  # Limit context
+                if answer['score'] > 0.1:  # Minimum confidence threshold
+                    return answer['answer']
+            except Exception:
+                pass
 
         # If QA fails, generate an extractive summary focused on query terms
-        try:
-            # Clean text by removing common PDF artifacts
-            text = re.sub(r'\s+', ' ', text)  # Collapse whitespace
-            text = re.sub(r'[^\w\s.,;:!?()-]', '', text)  # Remove special chars
+        if summarize is not None:
+            try:
+                # Clean text by removing common PDF artifacts
+                text = re.sub(r'\s+', ' ', text)  # Collapse whitespace
+                text = re.sub(r'[^\w\s.,;:!?()-]', '', text)  # Remove special chars
 
-            # Use extractive summarization focused on query terms
-            from summa import keywords
-            from summa.summarizer import summarize
+                # Use extractive summarization focused on query terms
+                # Boost query terms in importance
+                query_keywords = " ".join(set(query.split()))
+                boosted_text = f"{query_keywords}. {text}"
 
-            # Boost query terms in importance
-            query_keywords = " ".join(set(query.split()))
-            boosted_text = f"{query_keywords}. {text}"
+                summary = summarize(
+                    boosted_text,
+                    ratio=0.2,
+                    words=100,
+                    split=True
+                )
 
-            summary = summarize(
-                boosted_text,
-                ratio=0.2,
-                words=100,
-                split=True
-            )
-
-            if summary:
-                return " ".join(summary)
-        except Exception:
-            pass
+                if summary:
+                    return " ".join(summary)
+            except Exception:
+                pass
 
         # Fallback: extract sentences containing query terms
         sentences = re.split(r'(?<=[.!?])\s+', text)
@@ -800,16 +842,23 @@ class SemanticSearchView(View):
     def post(self, request):
         try:
             body = json.loads(request.body or '{}')
-        except Exception:
+        except Exception as e:
+            print(f"Error parsing request body: {e}")
             body = {}
+        
         query = body.get('query') or request.POST.get('query') or ''
         top_k = int(body.get('top_k') or request.POST.get('top_k') or 5)
+
+        print(f"Semantic search request - Query: '{query}', Top_k: {top_k}")
 
         if not query:
             return JsonResponse({"success": False, "message": "Empty query"}, status=400)
 
         model = self.get_model()
+        print(f"Model available: {model is not None}, NumPy available: {np is not None}")
+        
         if model is None or np is None:
+            print("Using fallback keyword search")
             # Fallback: keyword search
             qs = (
                 Contract.objects.select_related('organization_details', 'buyer', 'seller')
@@ -822,12 +871,12 @@ class SemanticSearchView(View):
                     | Q(seller__company_name__icontains=query)
                     | Q(buyer__email__icontains=query)
                 )
-                .only('id', 'contract_no', 'generated_date')
+                .only('id', 'contract_no', 'generated_date', 'raw_text')
                 .distinct()
             )
             results = [
                 {
-                    'raw_text':c.raw_text,
+                    'raw_text': c.raw_text,
                     'contract_no': c.contract_no,
                     'generated_date': c.generated_date.isoformat() if c.generated_date else '',
                     'score': 0.0,
@@ -837,13 +886,19 @@ class SemanticSearchView(View):
             top_summary = ""
 
             if results:
-                print("HELLO ...",results)
-                top_c = qs.first()
-                top_summary = self.generate_clean_summary(self.clean_raw_text(results[0].get('raw_text')))
+                print("HELLO ...", results)
+                top_contract = qs.first()
+                if top_contract and top_contract.raw_text:
+                    print(f"Generating summary for contract: {top_contract.contract_no}")
+                    top_summary = self.generate_clean_summary(self.clean_raw_text(top_contract.raw_text), query)
+                else:
+                    print("No raw text available for summary generation")
+                    top_summary = "No text available for summary"
 
-            summary =top_summary
+            summary = top_summary
 
-            print("SUMMERY : ",summary)
+            print("SUMMERY : ", summary)
+            print(f"Returning {len(results)} results")
             return JsonResponse({"success": True, "results": results, "summary": summary, "top_summary": top_summary})
 
         # Optional: parse date in query to bias ranking

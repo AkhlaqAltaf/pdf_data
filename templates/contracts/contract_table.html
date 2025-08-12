@@ -10,46 +10,58 @@
     #table-view {
         padding: 0 15px;
     }
+
     .page-title {
         margin: 1.5rem 0 1rem;
         font-size: 1.8rem;
     }
+
     .filter-form {
         padding: 0.8rem;
         gap: 0.6rem;
         margin-bottom: 1rem;
     }
-    .filter-input, .filter-btn {
+
+    .filter-input,
+    .filter-btn {
         padding: 0.5rem 0.8rem;
         font-size: 0.9rem;
     }
+
     .export-btns {
         gap: 0.7rem;
     }
+
     .action-btn {
         padding: 0.5rem 0.8rem;
         font-size: 0.85rem;
     }
-    .contracts-table th, 
+
+    .contracts-table th,
     .contracts-table td {
         padding: 0.6rem 0.8rem;
         font-size: 0.85rem;
         max-width: 200px;
     }
+
     .btn-sm {
         padding: 0.25rem 0.5rem;
         font-size: 0.8rem;
     }
+
     .collapse-toggle {
         padding: 0.3rem 0.5rem;
         font-size: 0.9rem;
     }
+
     .pagination {
         margin: 1rem 0;
     }
+
     .page-link {
         padding: 0.3rem 0.6rem;
     }
+
     .section-header th {
         padding: 0.5rem;
         font-size: 0.95rem;
@@ -61,124 +73,295 @@
         color: var(--accent-neon);
         border-bottom: 2px solid var(--accent-blue);
     }
+
     .contracts-table td {
-                background: rgba(0, 212, 255, 0.05);
+        background: rgba(0, 212, 255, 0.05);
 
         color: var(--text-secondary);
         border-bottom: 1px solid rgba(0, 212, 255, 0.1);
     }
+
     .contracts-table tr:hover td {
         background: rgba(0, 212, 255, 0.05);
         color: var(--text-primary);
     }
+
     .filter-input {
         background: rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(0, 212, 255, 0.2);
         color: var(--text-primary);
     }
-    .filter-btn, .action-btn {
+
+    .filter-btn,
+    .action-btn {
         background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon));
         color: var(--primary-dark);
     }
+
     .export-btn {
         background: linear-gradient(135deg, var(--accent-neon), #00cc66);
     }
+
     .btn-primary {
         background: linear-gradient(135deg, var(--accent-blue), #0077ff);
         border: none;
     }
-    
+
     /* User-Friendly Table Improvements */
     .contracts-table {
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-    
+
     .contracts-table th {
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         border-bottom: 2px solid var(--accent-blue);
     }
-    
+
     .contracts-table td {
         vertical-align: middle;
         transition: all 0.2s ease;
     }
-    
+
     .contracts-table tr:hover td {
         background: rgba(0, 212, 255, 0.08);
         transform: translateY(-1px);
         box-shadow: 0 2px 4px rgba(0, 212, 255, 0.1);
     }
-    
+
     .section-header th {
         background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3));
         font-weight: 700;
         text-align: center;
         padding: 1rem 0.5rem;
     }
-    
+
     /* Better button styling */
     .btn-sm {
         border-radius: 6px;
         font-weight: 500;
         transition: all 0.2s ease;
     }
-    
+
     .btn-sm:hover {
         transform: translateY(-1px);
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
-    
+
     /* Improved text truncation */
     .contracts-table td[title] {
         cursor: help;
     }
-    
+
     /* Better spacing for action buttons */
     .contracts-table td:last-child {
         text-align: center;
         min-width: 100px;
     }
+
+    /* AI Search Styles */
+    .status-message {
+        padding: 0.75rem;
+        border-radius: 6px;
+        font-weight: 500;
+        margin-bottom: 1rem;
+    }
+
+    .status-success {
+        background: rgba(0, 255, 0, 0.1);
+        border: 1px solid rgba(0, 255, 0, 0.3);
+        color: #00ff00;
+    }
+
+    .status-error {
+        background: rgba(255, 0, 0, 0.1);
+        border: 1px solid rgba(255, 0, 0, 0.3);
+        color: #ff6666;
+    }
+
+    .status-info {
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--accent-blue);
+    }
+
+    .results-section {
+        margin-top: 1rem;
+    }
+
+    .results-section .card {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        margin-bottom: 0.5rem;
+    }
+
+    .results-section .card-body {
+        padding: 1rem;
+        color: var(--text-primary);
+    }
+
+    .results-section .card-body div {
+        margin-bottom: 0.5rem;
+    }
+
+    .results-section .card-body div:last-child {
+        margin-bottom: 0;
+    }
+
+    .results-section .btn-outline-info {
+        border-color: var(--accent-blue);
+        color: var(--accent-blue);
+    }
+
+    .results-section .btn-outline-info:hover {
+        background: var(--accent-blue);
+        color: var(--primary-dark);
+    }
+
+    /* Loading spinner */
+    .spinner-border-sm {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    /* AI Search Results */
+    .ai-result-item {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .ai-result-item:hover {
+        background: rgba(0, 0, 0, 0.3);
+        border-color: rgba(0, 212, 255, 0.4);
+    }
+
+    .ai-result-score {
+        background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon));
+        color: var(--primary-dark);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .ai-summary {
+        background: rgba(0, 212, 255, 0.1);
+        border-left: 4px solid var(--accent-blue);
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 6px 6px 0;
+    }
+
+    /* New styles for AI relevant rows */
+    .ai-relevant-row {
+        background-color: rgba(0, 212, 255, 0.08) !important; /* Slightly different background for AI relevant */
+        border-left: 4px solid var(--accent-neon) !important; /* Highlight color for AI relevant */
+        position: relative;
+    }
+
+    .ai-relevant-row:hover {
+        background-color: rgba(0, 212, 255, 0.12) !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 212, 255, 0.2);
+    }
+
+    .ai-relevant-row td {
+        border-color: rgba(0, 212, 255, 0.2);
+    }
+
+    /* AI Status badge styling */
+    .badge.bg-success {
+        background: linear-gradient(135deg, var(--accent-neon), #00cc66) !important;
+        color: var(--primary-dark) !important;
+        font-weight: 600;
+        padding: 0.4rem 0.6rem;
+        border-radius: 6px;
+    }
+
+    .badge.bg-secondary {
+        background: rgba(108, 117, 125, 0.3) !important;
+        color: var(--text-secondary) !important;
+        border: 1px solid rgba(108, 117, 125, 0.5);
+    }
 </style>
 
 <div id="table-view">
     <h1 class="page-title">CONTRACTS DATABASE</h1>
-    
+
+    <!-- AI Semantic Search Section -->
+    <div class="card mb-3" style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(0, 212, 255, 0.2);">
+        <div class="card-header" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-neon)); color: var(--primary-dark); font-weight: 600;">
+            <i class="fas fa-robot me-2"></i>AI Semantic Search
+        </div>
+        <div class="card-body">
+            <div class="input-group mb-3">
+                <input id="aiQuery" type="text" class="form-control filter-input" placeholder="e.g. contracts in March 2024 about laptops, GSTIN 1234, buyer email..." value="">
+                <button id="aiSearchBtn" class="btn btn-primary filter-btn">
+                    <i class="fas fa-search me-1"></i>AI Search
+                </button>
+                <button id="clearAiFilterBtn" class="btn btn-outline-secondary" style="display: none;">
+                    <i class="fas fa-times me-1"></i>Clear Filter
+                </button>
+            </div>
+            <div id="aiSummary" class="status-message" style="display:none; margin-bottom: 1rem;"></div>
+            <div id="aiResults" class="results-section" style="display: none;"></div>
+            
+            <!-- AI Filter Status -->
+            {% if ai_filter %}
+            <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--accent-blue);">
+                <i class="fas fa-filter me-2"></i>
+                <strong>AI Filter Active:</strong> Showing only AI-relevant contracts. 
+                <button class="btn btn-sm btn-outline-info ms-2" onclick="clearAiFilter()">
+                    <i class="fas fa-times me-1"></i>Clear AI Filter
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <form class="filter-form d-flex flex-wrap align-items-center" method="get">
-        <input type="text" name="search" value="{{ search_query }}" class="filter-input me-2 mb-2" placeholder="Search...">
-        <select name="organisation_name" class="filter-input me-2 mb-2">
-            <option value="">Organisation</option>
-            {% for opt in org_options %}
-            <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
-            {% endfor %}
-        </select>
-        <select name="department" class="filter-input me-2 mb-2">
-            <option value="">Department</option>
-            {% for opt in dept_options %}
-            <option value="{{ opt }}" {% if opt == dept_filter %}selected{% endif %}>{{ opt }}</option>
-            {% endfor %}
-        </select>
-        <select name="ministry" class="filter-input me-2 mb-2">
-            <option value="">Ministry</option>
-            {% for opt in ministry_options %}
-            <option value="{{ opt }}" {% if opt == ministry_filter %}selected{% endif %}>{{ opt }}</option>
-            {% endfor %}
-        </select>
+        <input type="text" name="search" value="{{ search_query }}" class="filter-input me-2 mb-2"
+            placeholder="Search...">
+            <select name="organisation_name" class="filter-input me-2 mb-2">
+                <option value="">Organisation</option>
+                {% for opt in org_options %}
+                    <option value="{{ opt }}" {% if opt == org_filter %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+            <select name="department" class="filter-input me-2 mb-2">
+                <option value="">Department</option>
+                {% for opt in dept_options %}
+                    <option value="{{ opt }}" {% if opt == dept_filter %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+            
+            <select name="ministry" class="filter-input me-2 mb-2">
+                <option value="">Ministry</option>
+                {% for opt in ministry_options %}
+                    <option value="{{ opt }}" {% if opt == ministry_filter %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+            
         <input type="date" name="date_from" value="{{ date_from }}" class="filter-input me-2 mb-2" placeholder="From">
         <input type="date" name="date_to" value="{{ date_to }}" class="filter-input me-2 mb-2" placeholder="To">
-        
+
         <button class="filter-btn mb-2" type="submit">
             <i class="fas fa-filter me-1"></i>Apply
         </button>
-        
+
         <div class="export-btns d-flex ms-auto mb-2">
             <!-- <a class="action-btn export-btn me-2" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=excel">
                 <i class="fas fa-file-excel me-1"></i>Excel
             </a> -->
-            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);" href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
+            <a class="action-btn" style="background: linear-gradient(135deg, #9d4edd, #5a189a);"
+                href="?{% if search_query %}search={{ search_query|urlencode }}&amp;{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&amp;{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&amp;{% endif %}{% if date_from %}date_from={{ date_from }}&amp;{% endif %}{% if date_to %}date_to={{ date_to }}&amp;{% endif %}export=csv">
                 <i class="fas fa-file-csv me-1"></i>CSV
             </a>
         </div>
@@ -198,29 +381,33 @@
                     <th>Contract No</th>
                     <th>Date</th>
                     <th>Source</th>
-                    <th>Value</th>
-                    <th>Qty</th>
-                    <th>Type</th>
-                    
+                    <th>Buyer Address</th>
+                    <th>Paying Address</th>
+                    <th>Seller Address</th>
+
                     <!-- Organisation -->
                     <th>Ministry</th>
                     <th>Department</th>
                     <th>Organisation</th>
                     <th>Zone</th>
-                    
+
                     <!-- Buyer -->
                     <th>Designation</th>
                     <th>Contact</th>
                     <th>Email</th>
                     <th>GSTIN</th>
-                    
+                    <th>Value</th>
+                    <th>Qty</th>
+                    <th>Type</th>
+                    <th>AI Status</th>
+
                     <!-- Actions -->
                     <th>Details</th>
                 </tr>
             </thead>
             <tbody>
                 {% for contract in page_obj %}
-                <tr>
+                <tr {% if contract.is_ai_relevant %}class="ai-relevant-row"{% endif %}>
                     <!-- Basic Info -->
                     <td>{{ contract.contract_no }}</td>
                     <td>{{ contract.generated_date|date:"Y-m-d" }}</td>
@@ -231,51 +418,58 @@
                         </a>
                         {% else %}N/A{% endif %}
                     </td>
-                    <td>{{ contract.total_value }}</td>
-                    <td>{{ contract.total_quantity }}</td>
-                    <td>{{ contract.org_type }}</td>
-                    
+                    <td>{{ contract.buyer_address }}</td>
+
+                    <td>{{ contract.paying_address }}</td>
+
+                    <td>{{ contract.seller_address }}</td>
+
+
+
                     <!-- Organisation -->
                     <td>{{ contract.ministry }}</td>
                     <td>{{ contract.department }}</td>
                     <td>{{ contract.organisation }}</td>
                     <td>{{ contract.office_zone|default:"-" }}</td>
-                    
+
                     <!-- Buyer -->
                     <td title="{{ contract.buyer_designation }}">{{ contract.buyer_designation|truncatechars:20 }}</td>
                     <td>{{ contract.buyer_contact|default:"-" }}</td>
                     <td title="{{ contract.buyer_email }}">{{ contract.buyer_email|truncatechars:25 }}</td>
                     <td>{{ contract.buyer_gstin|default:"-" }}</td>
-                    
+                    <td>{{ contract.total_value }}</td>
+                    <td>{{ contract.total_quantity }}</td>
+                    <td>{{ contract.org_type }}</td>
+                    <td>
+                        {% if contract.is_ai_relevant %}
+                        <span class="badge bg-success">AI Relevant</span>
+                        {% else %}
+                        <span class="badge bg-secondary">-</span>
+                        {% endif %}
+                    </td>
                     <!-- Actions -->
                     <td>
-                        <button type="button" class="btn btn-sm btn-primary me-2" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#rawTextModal"
-                                data-raw="{{ contract.raw_text|escape }}">
+                        <button type="button" class="btn btn-sm btn-primary me-2" data-bs-toggle="modal"
+                            data-bs-target="#rawTextModal" data-raw="{{ contract.raw_text|escape }}">
                             <i class="fas fa-eye me-1"></i>View
                         </button>
-                        <button class="btn btn-sm btn-outline-primary" 
-                                type="button" 
-                                data-bs-toggle="collapse" 
-                                data-bs-target="#details-{{ forloop.counter }}"
-                                aria-expanded="false" 
-                                aria-controls="details-{{ forloop.counter }}">
+                        <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#details-{{ forloop.counter }}" aria-expanded="false"
+                            aria-controls="details-{{ forloop.counter }}">
                             <i class="fas fa-chevron-down me-1"></i>Show Details
                         </button>
                     </td>
                 </tr>
-                
+
                 <!-- Expandable row for details -->
                 <tr>
-                    <td colspan="15" class="p-0 border-top-0">
+                    <td colspan="16" class="p-0 border-top-0">
                         <div class="collapse" id="details-{{ forloop.counter }}">
                             <div class="p-2">
                                 <!-- Products Section -->
                                 <div class="mb-3">
-                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
-                                        data-bs-toggle="collapse" 
-                                        data-bs-target="#products-{{ forloop.counter }}">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1"
+                                        data-bs-toggle="collapse" data-bs-target="#products-{{ forloop.counter }}">
                                         Products ({{ contract.products|length }})
                                     </h6>
                                     <div class="collapse show" id="products-{{ forloop.counter }}">
@@ -285,20 +479,21 @@
                                                 <div class="bg-dark p-2 rounded">
                                                     <div><strong>Name:</strong> {{ product.name }}</div>
                                                     <div><strong>Brand:</strong> {{ product.brand }}</div>
-                                                    <div><strong>Qty:</strong> {{ product.quantity }} {{ product.unit }}</div>
-                                                    <div><strong>Price:</strong> {{ product.unit_price }} (Total: {{ product.total_price }})</div>
+                                                    <div><strong>Qty:</strong> {{ product.quantity }} {{ product.unit }}
+                                                    </div>
+                                                    <div><strong>Price:</strong> {{ product.unit_price }} (Total: {{
+                                                        product.total_price }})</div>
                                                 </div>
                                             </div>
                                             {% endfor %}
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Other sections with similar compact styling -->
                                 <div class="mb-2">
-                                    <h6 class="d-inline-block section-header collapse-toggle mb-1" 
-                                        data-bs-toggle="collapse" 
-                                        data-bs-target="#specs-{{ forloop.counter }}">
+                                    <h6 class="d-inline-block section-header collapse-toggle mb-1"
+                                        data-bs-toggle="collapse" data-bs-target="#specs-{{ forloop.counter }}">
                                         Specs ({{ contract.specifications|length }})
                                     </h6>
                                     <div class="collapse" id="specs-{{ forloop.counter }}">
@@ -309,15 +504,12 @@
                                         </ul>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Toggle button in the same row -->
                                 <div class="text-center mt-2">
-                                    <button class="btn btn-sm btn-outline-primary" 
-                                            type="button" 
-                                            data-bs-toggle="collapse" 
-                                            data-bs-target="#details-{{ forloop.counter }}"
-                                            aria-expanded="false" 
-                                            aria-controls="details-{{ forloop.counter }}">
+                                    <button class="btn btn-sm btn-outline-primary" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#details-{{ forloop.counter }}"
+                                        aria-expanded="false" aria-controls="details-{{ forloop.counter }}">
                                         Hide Details
                                     </button>
                                 </div>
@@ -327,7 +519,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="15">No contracts found</td>
+                    <td colspan="16">No contracts found</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -339,13 +531,18 @@
     <nav aria-label="Pagination">
         <ul class="pagination justify-content-center">
             {% if page_obj.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Prev</a></li>
+            <li class="page-item"><a class="page-link"
+                    href="?page={{ page_obj.previous_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Prev</a>
+            </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">Prev</span></li>
             {% endif %}
-            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{
+                    page_obj.paginator.num_pages }}</span></li>
             {% if page_obj.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a></li>
+            <li class="page-item"><a class="page-link"
+                    href="?page={{ page_obj.next_page_number }}&{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if org_filter %}organisation_name={{ org_filter|urlencode }}&{% endif %}{% if dept_filter %}department={{ dept_filter|urlencode }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}">Next</a>
+            </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">Next</span></li>
             {% endif %}
@@ -359,7 +556,8 @@
             <div class="modal-content bg-dark">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title">Raw Text</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
                 </div>
                 <div class="modal-body raw-text-modal">
                     <pre class="bg-dark text-light p-2 mb-0" id="rawTextContainer" style="max-height: 60vh;"></pre>
@@ -373,32 +571,243 @@
 {% block scripts %}
 {{ block.super }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    var rawTextModal = document.getElementById('rawTextModal');
-    if (rawTextModal) {
-        rawTextModal.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget;
-            var raw = button?.getAttribute('data-raw') || '';
-            try { 
-                raw = raw.replaceAll('&lt;','<')
-                         .replaceAll('&gt;','>')
-                         .replaceAll('&amp;','&'); 
-            } catch (e) {}
-            document.getElementById('rawTextContainer').textContent = raw;
-        });
-    }
+    document.addEventListener('DOMContentLoaded', function () {
+        var rawTextModal = document.getElementById('rawTextModal');
+        if (rawTextModal) {
+            rawTextModal.addEventListener('show.bs.modal', function (event) {
+                var button = event.relatedTarget;
+                var raw = button?.getAttribute('data-raw') || '';
+                try {
+                    raw = raw.replaceAll('&lt;', '<')
+                        .replaceAll('&gt;', '>')
+                        .replaceAll('&amp;', '&');
+                } catch (e) { }
+                document.getElementById('rawTextContainer').textContent = raw;
+            });
+        }
 
-    // Auto-collapse other sections when one is opened
-    document.querySelectorAll('.collapse-toggle').forEach(button => {
-        button.addEventListener('click', function() {
-            const target = this.getAttribute('data-bs-target');
-            document.querySelectorAll('.collapse').forEach(collapse => {
-                if (collapse.id !== target.replace('#', '')) {
-                    bootstrap.Collapse.getInstance(collapse)?.hide();
-                }
+        // Auto-collapse other sections when one is opened
+        document.querySelectorAll('.collapse-toggle').forEach(button => {
+            button.addEventListener('click', function () {
+                const target = this.getAttribute('data-bs-target');
+                document.querySelectorAll('.collapse').forEach(collapse => {
+                    if (collapse.id !== target.replace('#', '')) {
+                        bootstrap.Collapse.getInstance(collapse)?.hide();
+                    }
+                });
             });
         });
+
+        // AI Semantic Search functionality
+        const aiSearchBtn = document.getElementById('aiSearchBtn');
+        const aiQuery = document.getElementById('aiQuery');
+        const aiSummary = document.getElementById('aiSummary');
+        const aiResults = document.getElementById('aiResults');
+        const clearAiFilterBtn = document.getElementById('clearAiFilterBtn');
+
+        if (aiSearchBtn && aiQuery && aiSummary && aiResults) {
+            // Handle Enter key press
+            aiQuery.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performAISearch();
+                }
+            });
+
+            // Handle search button click
+            aiSearchBtn.addEventListener('click', performAISearch);
+
+            // Handle clear filter button click
+            clearAiFilterBtn.addEventListener('click', function() {
+                aiQuery.value = '';
+                aiSearchBtn.disabled = false;
+                aiSearchBtn.innerHTML = '<i class="fas fa-search me-1"></i>AI Search';
+                aiSummary.style.display = 'none';
+                aiResults.style.display = 'none';
+                clearAiFilterBtn.style.display = 'none';
+                // Re-apply filters from URL if they exist
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('search')) {
+                    urlParams.delete('search');
+                }
+                if (urlParams.has('organisation_name')) {
+                    urlParams.delete('organisation_name');
+                }
+                if (urlParams.has('department')) {
+                    urlParams.delete('department');
+                }
+                if (urlParams.has('ministry')) {
+                    urlParams.delete('ministry');
+                }
+                if (urlParams.has('date_from')) {
+                    urlParams.delete('date_from');
+                }
+                if (urlParams.has('date_to')) {
+                    urlParams.delete('date_to');
+                }
+                window.location.search = urlParams.toString();
+            });
+
+            function performAISearch() {
+                const query = aiQuery.value.trim();
+                if (!query) {
+                    showAIStatus('Please enter a search query', 'error');
+                    return;
+                }
+
+                // Show loading state
+                aiSearchBtn.disabled = true;
+                aiSearchBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Searching...';
+                
+                // Clear previous results
+                aiSummary.style.display = 'none';
+                aiResults.innerHTML = '';
+                aiResults.style.display = 'none'; // Hide results section
+                clearAiFilterBtn.style.display = 'none'; // Hide clear button
+
+                // Get CSRF token
+                const csrfToken = getCookie('csrftoken');
+
+                // Make AJAX request to semantic search endpoint
+                fetch('/semantic-search/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        top_k: 5
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayAIResults(data, query);
+                    } else {
+                        showAIStatus(data.message || 'Search failed', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('AI Search error:', error);
+                    showAIStatus('Search failed. Please try again.', 'error');
+                })
+                .finally(() => {
+                    // Reset button state
+                    aiSearchBtn.disabled = false;
+                    aiSearchBtn.innerHTML = '<i class="fas fa-search me-1"></i>AI Search';
+                });
+            }
+
+            function displayAIResults(data, query) {
+                // Display summary
+                if (data.summary) {
+                    aiSummary.innerHTML = `
+                        <div class="ai-summary">
+                            <strong>AI Summary for "${query}":</strong><br>
+                            ${data.summary}
+                        </div>
+                    `;
+                    aiSummary.style.display = 'block';
+                    aiSummary.className = 'status-message status-success';
+                }
+
+                // Filter the main table based on AI search results
+                if (data.results && data.results.length > 0) {
+                    // Get contract numbers from AI results
+                    const contractNumbers = data.results.map(result => result.contract_no).filter(Boolean);
+                    
+                    // Show results summary
+                    const resultsHtml = `
+                        <div class="ai-result-item">
+                            <div class="mb-2">
+                                <strong>AI Search Results:</strong> Found ${data.results.length} relevant contracts
+                            </div>
+                            <div class="mb-2">
+                                <strong>Filtered Contracts:</strong> ${contractNumbers.join(', ')}
+                            </div>
+                            <div class="text-muted">
+                                The table below now shows only the contracts matching your AI search query.
+                            </div>
+                        </div>
+                    `;
+                    
+                    aiResults.innerHTML = resultsHtml;
+                    aiResults.style.display = 'block';
+                    clearAiFilterBtn.style.display = 'inline-block';
+
+                    // Filter the main table by redirecting with search parameters
+                    const searchParams = new URLSearchParams();
+                    // Use the first contract number as the main search term
+                    if (contractNumbers.length > 0) {
+                        searchParams.set('search', contractNumbers[0]);
+                        searchParams.set('ai_filter', 'true');
+                        searchParams.set('ai_contracts', contractNumbers.join(','));
+                    }
+                    
+                    // Preserve existing filters
+                    const currentParams = new URLSearchParams(window.location.search);
+                    ['organisation_name', 'department', 'ministry', 'date_from', 'date_to'].forEach(param => {
+                        if (currentParams.has(param)) {
+                            searchParams.set(param, currentParams.get(param));
+                        }
+                    });
+                    
+                    // Redirect to filtered view
+                    window.location.search = searchParams.toString();
+                    
+                } else {
+                    aiResults.innerHTML = '<div class="text-muted">No relevant contracts found.</div>';
+                    aiResults.style.display = 'block';
+                    clearAiFilterBtn.style.display = 'inline-block';
+                }
+            }
+
+            function showAIStatus(message, type) {
+                aiSummary.textContent = message;
+                aiSummary.style.display = 'block';
+                aiSummary.className = `status-message status-${type}`;
+            }
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        }
+
+        // Function to view contract details (can be enhanced later)
+        window.viewContractDetails = function(contractNo) {
+            // For now, just scroll to the contract table and highlight
+            // This can be enhanced to show a modal or navigate to details
+            showAIStatus(`Viewing details for contract: ${contractNo}`, 'info');
+            
+            // Scroll to the table
+            document.querySelector('.contracts-table').scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'start'
+            });
+        };
+
+        // Function to clear AI filter
+        window.clearAiFilter = function() {
+            // Remove AI filter parameters from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.delete('ai_filter');
+            urlParams.delete('ai_contracts');
+            urlParams.delete('search');
+            
+            // Redirect to clean URL
+            window.location.search = urlParams.toString();
+        };
     });
-});
 </script>
 {% endblock %}
